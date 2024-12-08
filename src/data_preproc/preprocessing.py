@@ -1,50 +1,76 @@
 import pandas as pd
-import logging
+import numpy as np
 
 class DataPreprocessor:
-    def __init__(self, data_path, processed_features_path, processed_targets_path):
+    def __init__(self, data_path, processed_features_path, processed_targets_path, cuts):
         self.data_path = data_path
         self.processed_features_path = processed_features_path
         self.processed_targets_path = processed_targets_path
-        self.logger = logging.getLogger(__name__)
-        logging.basicConfig(level=logging.INFO)
+        self.cuts = cuts
 
     def load_data(self):
         raw_data_path = self.data_path
-        self.logger.info(f"Loading data from {raw_data_path}")
         self.data = pd.read_csv(raw_data_path)
-        self.logger.info("Data loaded successfully.")
 
     def process_features(self):
-        self.logger.info("Processing features.")
-
         lep0 = self.data[['p_l_1_E', 'p_l_1_x', 'p_l_1_y', 'p_l_1_z']]
         lep1 = self.data[['p_l_2_E', 'p_l_2_x', 'p_l_2_y', 'p_l_2_z']]
-        mpx = (self.data['p_v_1_x'] + self.data['p_v_2_x']).to_frame(name='mpx')
-        mpy = (self.data['p_v_1_y'] + self.data['p_v_2_y']).to_frame(name='mpy')
+        
+        if 'mpx' not in self.data.columns:
+            mpx = (self.data['p_v_1_x'] + self.data['p_v_2_x']).to_frame(name='mpx')
+            mpy = (self.data['p_v_1_y'] + self.data['p_v_2_y']).to_frame(name='mpy')
+        else:
+            mpx = self.data[['mpx']]
+            mpy = self.data[['mpy']]
 
         self.X = pd.concat([lep0, lep1, mpx, mpy], axis=1)
-        self.logger.info("Features processed successfully.")
 
     def process_targets(self):
-        self.logger.info("Processing targets.")
         y1 = self.data[['p_v_1_E', 'p_v_1_x', 'p_v_1_y', 'p_v_1_z']]
         y2 = self.data[['p_v_2_E', 'p_v_2_x', 'p_v_2_y', 'p_v_2_z']]
 
         self.y = pd.concat([y1, y2], axis=1)
-        self.logger.info("Targets processed successfully.")
 
     def scale_data(self):
-        self.logger.info("Scaling data.")
         self.X /= 1e3
         self.y /= 1e3
-        self.logger.info("Data scaling completed.")
 
     def save_data(self):
         features_path = self.config['data']['processed_features_path']
         targets_path = self.config['data']['processed_targets_path']
-        self.logger.info(f"Saving features to {features_path}")
         self.X.to_csv(features_path, index=False)
-        self.logger.info(f"Saving targets to {targets_path}")
         self.y.to_csv(targets_path, index=False)
-        self.logger.info("Data saved successfully.")
+
+    @classmethod
+    def p_T(lep_x, lep_y):
+        return np.sqrt(lep_x**2 + lep_y**2)
+    
+    @classmethod
+    def p(lep_x, lep_y, lep_z):
+        return np.sqrt(lep_x**2 + lep_y**2 + lep_z**2)
+    
+    @classmethod
+    def eta(p, pz):
+        return np.abs(1/2 * np.log((p + pz)/(p - pz)))
+
+    def apply_selection_cuts(self):
+        self.X = self.X.assign(lep0_pT = self.p_T(self.X['p_l_1_x'], self.X['p_l_1_y']))
+        self.X = self.X.assign(lep1_pT = self.p_T(self.X['p_l_2_x'], self.X['p_l_2_y']))
+        self.X = self.X.assign(lep0_p = self.p(self.X['p_l_1_x'], self.X['p_l_1_y'], self.X['p_l_1_z']))
+        self.X = self.X.assign(lep1_p = self.p(self.X['p_l_2_x'], self.X['p_l_2_y'], self.X['p_l_2_z']))
+        self.X = self.X.assign(lep0_eta = self.eta(self.X['lep0_p'], self.X['p_l_1_z']))
+        self.X = self.X.assign(lep1_eta = self.eta(self.X['lep1_p'], self.X['p_l_2_z']))
+
+        self.X = self.X[(self.X.lep0_pT > 22.0) & (self.X.lep1_pT > 15.0) & (self.X.lep0_eta < 2.47) & (self.X.lep1_eta < 2.47)]
+        self.y = self.y.loc[self.X.index]
+        self.X = self.X.drop(columns=['lep0_pT', 'lep1_pT', 'lep0_p', 'lep1_p', 'lep0_eta', 'lep1_eta'])
+
+    def run_preprocessing(self):
+        self.load_data()
+        self.process_features()
+        self.process_targets()
+        self.scale_data()
+        if self.cuts:
+            self.apply_selection_cuts()
+        self.save_data()
+        return self.X, self.y
