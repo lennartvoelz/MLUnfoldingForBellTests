@@ -1,5 +1,7 @@
 **/data/
 data/
+reports/
+logs/
 *.pyc
 *.root
 *.json
