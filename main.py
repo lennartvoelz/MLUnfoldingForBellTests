@@ -1,30 +1,59 @@
+from src.data_preproc.preprocessing import DataPreprocessor
+from src.reconstruction.dense_nn import DNN
+import yaml
 from src.evaluation.evaluation import calculate_results
-from src.utils.lorentz_vector import LorentzVector
-from src.reconstruction.analytical_reconstruction import Baseline
+from src.evaluation.calculate_mae import results
 import numpy as np
+import tensorflow as tf
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.losses import LogCosh
+from tensorflow.keras.metrics import MeanAbsoluteError
+from tensorflow.keras.callbacks import EarlyStopping
 
-lep0_E, lep0_px, lep0_py, lep0_pz, lep1_E, lep1_px, lep1_py, lep1_pz, mpx, mpy = np.loadtxt("data/X_features.csv", delimiter=",", unpack=True)
-lep0_E_truth, lep0_px_truth, lep0_py_truth, lep0_pz_truth, lep1_E_truth, lep1_px_truth, lep1_py_truth, lep1_pz_truth, neutrino1_E_truth, neutrino1_px_truth, neutrino1_py_truth, neutrino1_pz_truth, neutrino2_E_truth, neutrino2_px_truth, neutrino2_py_truth, neutrino2_pz_truth, _ = np.loadtxt("data/truth_finalstate.csv", delimiter=",", unpack=True)
+config = yaml.safe_load(open('config.yaml'))
 
-# Initialize LorentzVector truth objects
-lep0_truth = np.array([LorentzVector([lep0_E_truth[i], lep0_px_truth[i], lep0_py_truth[i], lep0_pz_truth[i]]) for i in range(len(lep0_E_truth))])
-lep1_truth = np.array([LorentzVector([lep1_E_truth[i], lep1_px_truth[i], lep1_py_truth[i], lep1_pz_truth[i]]) for i in range(len(lep1_E_truth))])
-neutrino1_truth = np.array([LorentzVector([neutrino1_E_truth[i], neutrino1_px_truth[i], neutrino1_py_truth[i], neutrino1_pz_truth[i]]) for i in range(len(neutrino1_E_truth))])
-neutrino2_truth = np.array([LorentzVector([neutrino2_E_truth[i], neutrino2_px_truth[i], neutrino2_py_truth[i], neutrino2_pz_truth[i]]) for i in range(len(neutrino2_E_truth))])
-                      
-# Initialize LorentzVector objects
-lep0 = np.array([LorentzVector([lep0_E[i], lep0_px[i], lep0_py[i], lep0_pz[i]]) for i in range(len(lep0_E))])
-lep1 = np.array([LorentzVector([lep1_E[i], lep1_px[i], lep1_py[i], lep1_pz[i]]) for i in range(len(lep1_E))])
+data_preprocessor_no_cuts = DataPreprocessor(data_path=config['data_path'], cuts=False)
+data_preprocessor_cuts = DataPreprocessor(data_path=config['data_path'], cuts=True)
 
-# Calculate analytical reconstruction
-neutrinos = np.array([Baseline(lep0[i], lep1[i], mpx[i], mpy[i]).calculate_neutrino_solutions() for i in range(len(lep0))])
-neutrino0 = neutrinos[:,0]
-neutrino1 = neutrinos[:,1]
+X_no_cuts_train, X_no_cuts_val, X_no_cuts_test, y_no_cuts_train, y_no_cuts_val, y_no_cuts_test = data_preprocessor_no_cuts.run_preprocessing()
+X_cuts_train, X_cuts_val, X_cuts_test, y_cuts_train, y_cuts_val, y_cuts_test = data_preprocessor_cuts.run_preprocessing()
 
-# Calculate results
-results = calculate_results(truth=np.array([lep0_truth, lep1_truth, neutrino1_truth, neutrino2_truth]).T, analytical_reconstruction=np.array([lep0, lep1, neutrino0, neutrino1]).T)
-results.initialize_datasets()
+dense_net = DNN(config)
 
-# Plot results
-results.plot_gellmann_coefficients("reports/figures/")
-results.plot_gellmann_coefficients_hist("reports/figures/")
+optimizer = Adam(learning_rate=config['learning_rate'])
+loss = LogCosh()
+metrics = [MeanAbsoluteError()]
+callbacks = [EarlyStopping(monitor='val_loss', patience=config['patience'])]
+
+# Train DNN without cuts
+dense_net = DNN(config)
+compiled_dnn = dense_net.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+
+history_no_cuts = dense_net.fit(X_no_cuts_train, y_no_cuts_train, X_no_cuts_val, y_no_cuts_val, callbacks=callbacks)
+
+# Evaluate DNN without cuts
+y_no_cuts_pred = dense_net.predict(X_no_cuts_test)
+final_state_no_cuts = np.concatenate((X_no_cuts_test, y_no_cuts_pred), axis=1)
+final_state_no_cuts_truth = np.concatenate((X_no_cuts_test, y_no_cuts_test), axis=1)
+
+results_no_cuts = calculate_results(truth=final_state_no_cuts_truth, neural_network_reconstruction=final_state_no_cuts)
+results_no_cuts.run("reports/figures/")
+
+results_no_cuts = results(truth=final_state_no_cuts_truth, neural_network_reconstruction=final_state_no_cuts)
+results_no_cuts.run("reports/regression_results/")
+
+# Train DNN with cuts
+dense_net = DNN(config)
+compiled_dnn = dense_net.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+
+history_cuts = dense_net.fit(X_cuts_train, y_cuts_train, X_cuts_val, y_cuts_val, callbacks=callbacks)
+
+# Evaluate DNN with cuts
+y_cuts_pred = dense_net.predict(X_cuts_test)
+final_state_cuts = np.concatenate((X_cuts_test, y_cuts_pred), axis=1)
+final_state_cuts_truth = np.concatenate((X_cuts_test, y_cuts_test), axis=1)
+
+results_cuts = calculate_results(truth=final_state_cuts_truth, neural_network_reconstruction=final_state_cuts)
+results_cuts.run("reports/figures/")
+results_cuts = results(truth=final_state_cuts_truth, neural_network_reconstruction=final_state_cuts)
+results_cuts.run("reports/regression_results/")
