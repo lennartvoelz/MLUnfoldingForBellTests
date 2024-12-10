@@ -1,12 +1,14 @@
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split
 
 class DataPreprocessor:
-    def __init__(self, data_path, processed_features_path, processed_targets_path, cuts):
+    def __init__(self, data_path, processed_features_path=None, processed_targets_path=None, cuts=True, splits=True):
         self.data_path = data_path
         self.processed_features_path = processed_features_path
         self.processed_targets_path = processed_targets_path
         self.cuts = cuts
+        self.splits = splits
 
     def load_data(self):
         raw_data_path = self.data_path
@@ -41,16 +43,19 @@ class DataPreprocessor:
         self.X.to_csv(features_path, index=False)
         self.y.to_csv(targets_path, index=False)
 
-    @classmethod
-    def p_T(lep_x, lep_y):
+    def create_split(self):
+        X_train, X_test, y_train, y_test = train_test_split(self.X, self.y, test_size=0.2, random_state=42)
+        X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+
+        return X_train, X_val, X_test, y_train, y_val, y_test
+
+    def p_T(self, lep_x, lep_y):
         return np.sqrt(lep_x**2 + lep_y**2)
     
-    @classmethod
-    def p(lep_x, lep_y, lep_z):
+    def p(self, lep_x, lep_y, lep_z):
         return np.sqrt(lep_x**2 + lep_y**2 + lep_z**2)
     
-    @classmethod
-    def eta(p, pz):
+    def eta(self, p, pz):
         return np.abs(1/2 * np.log((p + pz)/(p - pz)))
 
     def apply_selection_cuts(self):
@@ -60,17 +65,23 @@ class DataPreprocessor:
         self.X = self.X.assign(lep1_p = self.p(self.X['p_l_2_x'], self.X['p_l_2_y'], self.X['p_l_2_z']))
         self.X = self.X.assign(lep0_eta = self.eta(self.X['lep0_p'], self.X['p_l_1_z']))
         self.X = self.X.assign(lep1_eta = self.eta(self.X['lep1_p'], self.X['p_l_2_z']))
+        print(self.X["lep0_pT"])
 
         self.X = self.X[(self.X.lep0_pT > 22.0) & (self.X.lep1_pT > 15.0) & (self.X.lep0_eta < 2.47) & (self.X.lep1_eta < 2.47)]
         self.y = self.y.loc[self.X.index]
         self.X = self.X.drop(columns=['lep0_pT', 'lep1_pT', 'lep0_p', 'lep1_p', 'lep0_eta', 'lep1_eta'])
 
-    def run_preprocessing(self):
+    def run_preprocessing(self) -> tuple:
         self.load_data()
         self.process_features()
         self.process_targets()
         self.scale_data()
         if self.cuts:
             self.apply_selection_cuts()
-        self.save_data()
-        return self.X, self.y
+        if self.processed_features_path and self.processed_targets_path:
+            self.save_data()
+        print(self.X.shape, self.y.shape)
+        if self.splits:
+            return self.create_split()
+        else:
+            return self.X, self.y
