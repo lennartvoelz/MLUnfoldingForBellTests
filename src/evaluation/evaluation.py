@@ -148,3 +148,8 @@ class calculate_results():
         plt.savefig(file_path)
         plt.close()
         print(f"Histogram plot saved to {file_path}")
+
+    def run(self, target_path):
+        self.initialize_datasets()
+        self.plot_gellmann_coefficients(target_path)
+        self.plot_gellmann_coefficients_hist(target_path)
