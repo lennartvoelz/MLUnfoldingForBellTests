@@ -173,11 +173,11 @@ class Baseline(LorentzVector):
     def calculate_neutrino_solutions(self):
         if self.p4_lep0.get_pt() > self.p4_lep1.get_pt():
             p4_lep_onshell = self.p4_lep0
-            p4_lep_offshell = self.p4_lep1
+            #p4_lep_offshell = self.p4_lep1
             switched = False
         else:
             p4_lep_onshell = self.p4_lep1
-            p4_lep_offshell = self.p4_lep0
+            #p4_lep_offshell = self.p4_lep0
             switched = True
 
         p_vv_z = self.reconstruct_p_vv_z()
