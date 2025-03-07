@@ -157,10 +157,10 @@ class I_3():
         self.pW1 += pW1_event
         self.pW2 += pW2_event
 
-        # Calculate correlations using vectorized operations
-        cov_increment = np.outer(pW2_event, pW1_event)
-        self.cov += cov_increment
-        self.cov_sym += cov_increment + cov_increment.T
+        for i in range(8):
+            for j in range(8):
+                self.cov[i][j] = self.cov[i][j] + (pW2_event[i] * pW1_event[j])
+                self.cov_sym[i][j] = self.cov_sym[i][j] + (pW2_event[i] * pW1_event[j]) + (pW2_event[j] * pW1_event[i])
 
         return self.pW1, self.pW2, self.cov, self.cov_sym
 

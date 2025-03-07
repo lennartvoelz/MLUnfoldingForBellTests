@@ -61,6 +61,13 @@ class LorentzVector():
         """
         return LorentzVector([self.E * other, self.p_x * other, self.p_y * other, self.p_z * other], type="four-vector")
     
+    def to_numpy(self):
+        """
+        Returns:
+            np.array: LorentzVector object as numpy array
+        """
+        return np.array([self.E, self.p_x, self.p_y, self.p_z])
+    
     def get_eta(self):
         """
         Returns:

@@ -44,10 +44,10 @@ class DataPreprocessor:
         self.y.to_csv(targets_path, index=False)
 
     def create_split(self):
-        X_train, X_test, y_train, y_test = train_test_split(self.X, self.y, test_size=0.2, random_state=42)
-        X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+        X_train, X_temp, y_train, y_temp = train_test_split(self.X, self.y, test_size=0.2, random_state=42)
+        X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
 
-        return X_train, X_val, X_test, y_train, y_val, y_test
+        return X_train.to_numpy(), X_val.to_numpy(), X_test.to_numpy(), y_train.to_numpy(), y_val.to_numpy(), y_test.to_numpy()
 
     def p_T(self, lep_x, lep_y):
         return np.sqrt(lep_x**2 + lep_y**2)
@@ -65,7 +65,6 @@ class DataPreprocessor:
         self.X = self.X.assign(lep1_p = self.p(self.X['p_l_2_x'], self.X['p_l_2_y'], self.X['p_l_2_z']))
         self.X = self.X.assign(lep0_eta = self.eta(self.X['lep0_p'], self.X['p_l_1_z']))
         self.X = self.X.assign(lep1_eta = self.eta(self.X['lep1_p'], self.X['p_l_2_z']))
-        print(self.X["lep0_pT"])
 
         self.X = self.X[(self.X.lep0_pT > 22.0) & (self.X.lep1_pT > 15.0) & (self.X.lep0_eta < 2.47) & (self.X.lep1_eta < 2.47)]
         self.y = self.y.loc[self.X.index]
@@ -75,13 +74,12 @@ class DataPreprocessor:
         self.load_data()
         self.process_features()
         self.process_targets()
-        self.scale_data()
+        #self.scale_data()
         if self.cuts:
             self.apply_selection_cuts()
         if self.processed_features_path and self.processed_targets_path:
             self.save_data()
-        print(self.X.shape, self.y.shape)
         if self.splits:
             return self.create_split()
         else:
-            return self.X, self.y
+            return self.X.to_numpy(), self.y.to_numpy()

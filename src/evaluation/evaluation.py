@@ -1,28 +1,32 @@
 from src.evaluation.bell_test import I_3
+from src.utils.lorentz_vector import LorentzVector
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
+import matplotlib.colors as mcolors
 from datetime import datetime
 import os
 
 class calculate_results():
-    def __init__(self, truth=None, analytical_reconstruction=None, neural_network_reconstruction=None):
-        self.analytical_reconstruction = analytical_reconstruction
-        self.neural_network_reconstruction = neural_network_reconstruction
-        self.truth = truth
-        self.num_samples = len(truth)
+    def __init__(self, arrays, labels, title):
+        self.reconstructions = {label: array for label, array in zip(labels, arrays)}
+        self.title = title
 
     def calculate_gellmann_coefficients(self, array):
         """
         Calculates the Gell-Mann coefficients for each event in the reconstruction array
         """
-        num_samples = self.num_samples
-
-        lep1 = array[:,0]
-        lep2 = array[:,1]
-        neutrino1 = array[:,2]
-        neutrino2 = array[:,3]
-        print(lep1.shape)
+        num_samples = len(array)
+        lep1 = array[:,:4]
+        lep2 = array[:,4:8]
+        neutrino1 = array[:,8:12]
+        neutrino2 = array[:,12:]
+        
+        # Convert to LorentzVector objects
+        lep1 = [LorentzVector(lep1[i], type="four-vector") for i in range(num_samples)]
+        lep2 = [LorentzVector(lep2[i], type="four-vector") for i in range(num_samples)]
+        neutrino1 = [LorentzVector(neutrino1[i], type="four-vector") for i in range(num_samples)]
+        neutrino2 = [LorentzVector(neutrino2[i], type="four-vector") for i in range(num_samples)]
 
         pW1 = np.zeros((num_samples, 8))
         pW2 = np.zeros((num_samples, 8))
@@ -41,8 +45,8 @@ class calculate_results():
             cov[i] = cov_event
             cov_sym[i] = cov_sym_event
 
-        cov_2d = cov.reshape(num_samples, -1)
-        cov_sym_2d = cov_sym.reshape(num_samples, -1)
+        cov_2d = cov
+        cov_sym_2d = cov_sym
 
         return pW1, pW2, cov_2d, cov_sym_2d
     
@@ -53,47 +57,36 @@ class calculate_results():
         self.datasets = []
         self.labels = []
         self.colors = []
+
+        color_map = plt.get_cmap('Set1')
         
-        if self.analytical_reconstruction is not None:
-            pW1_a, pW2_a, cov_2d_a, cov_sym_2d_a = self.calculate_gellmann_coefficients(self.analytical_reconstruction)
-            self.datasets.append(cov_2d_a)
-            self.labels.append('Analytical Reconstruction')
-            self.colors.append('blue')
-        
-        if self.truth is not None:
-            pW1_t, pW2_t, cov_2d_t, cov_sym_2d_t = self.calculate_gellmann_coefficients(self.truth)
-            self.datasets.append(cov_2d_t)
-            self.labels.append('Truth')
-            self.colors.append('green')
-        
-        if self.neural_network_reconstruction is not None:
-            pW1_n, pW2_n, cov_2d_n, cov_sym_2d_n = self.calculate_gellmann_coefficients(self.neural_network_reconstruction)
-            self.datasets.append(cov_2d_n)
-            self.labels.append('Neural Network Reconstruction')
-            self.colors.append('red')
-        
-        if not self.datasets:
-            print("No datasets available for processing.")
+        for idx, (label, array) in enumerate(self.reconstructions.items()):
+            pW1, pW2, cov_2d, cov_sym_2d = self.calculate_gellmann_coefficients(array)
+            self.datasets.append(cov_2d)
+            self.labels.append(label)
+            self.colors.append(color_map(idx))
     
     def plot_gellmann_coefficients(self, target_path):
         """
         Plots the Gellmann coefficients in a 8x8 grid
         """
-        num_samples = self.num_samples
 
         os.makedirs(target_path, exist_ok=True)
 
         for cov_2d, label in zip(self.datasets, self.labels):
-            cov = cov_2d.reshape(num_samples, 8, 8)
+            cov_mean = cov_2d.mean(axis=0)/4
 
-            cov_mean = cov.mean(axis=0)
+            vmin = cov_mean.min()
+            vmax = cov_mean.max()
+            norm = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
 
             plt.figure(figsize=(8, 6))
-            plt.imshow(cov_mean, cmap='seismic', interpolation='nearest')
+            plt.imshow(cov_mean, cmap='seismic', norm=norm, interpolation='nearest')
             plt.colorbar()
-            plt.title(f"Coefficients $c_{{ij}}$ - {label}")
-            plt.xlabel('Index $j$')
-            plt.ylabel('Index $i$')
+            plt.title(f"Coefficients $c_{{ij}}$ - {self.title}", fontsize=16)
+            plt.xlabel(r'$W^+$ Index $j$', fontsize=14)
+            plt.ylabel(r'$W^-$ Index $i$', fontsize=14)
+            plt.gca().invert_yaxis()
             plt.tight_layout()
 
             # Create a unique identifier based on current date and time and add the label
@@ -111,32 +104,45 @@ class calculate_results():
         """
         Plots the histograms of the Gell-Mann coefficients in a 8x8 grid
         """
-        num_samples = self.num_samples
-        reshaped_covs = [cov_2d.reshape(num_samples, 8, 8) for cov_2d in self.datasets]
+        reshaped_covs = [cov_2d.reshape(len(cov_2d), 8, 8) for cov_2d in self.datasets]
+
+        hist_data = {}
+        for reshaped_cov, label in zip(reshaped_covs, self.labels):
+            hist_data[label] = {}
+            for i in range(8):
+                for j in range(8):
+                    hist_data[label][(i, j)] = np.histogram(reshaped_cov[:, i, j], bins=50, density=True)
 
         plt.figure(figsize=(20, 20))
+        plt.suptitle(f"{self.title}", fontsize=30)
         for i in range(8):
             for j in range(8):
                 plt.subplot(8, 8, i*8 + j + 1)
-                for reshaped_cov, label, color in zip(reshaped_covs, self.labels, self.colors):
-                    plt.hist(reshaped_cov[:, i, j], bins=25, alpha=0.5, label=label, color=color)
-                
+                for label, color in zip(self.labels, self.colors):
+                    hist, bins = hist_data[label][(i, j)]
+                    plt.step(bins[:-1], hist, label=label, color=color, linewidth=1.2, alpha=0.8)
+                    # Save the histogram data and bin edges for further analysis
+                    data_and_edges = {'hist': hist, 'bins': bins}
+                    # np.save(f'{target_path}histogram_data_{label}_{i}_{j}.npy', data_and_edges)
+                    
+
                 plt.ylim(0, plt.ylim()[1]*1.1)
-                
-                if (i, j) in [(0, 5), (1, 6), (2, 7), (2, 2), (3, 3), (4, 4), (5, 0), (6, 1), (7, 2)]:
+
+                if (i, j) in [(0, 2), (1, 1), (2, 0), (4, 3), (3, 4), (5, 2), (7, 5), (6, 6), (5, 7)]:
                     ax = plt.gca()
                     for spine in ax.spines.values():
                         spine.set_color('red')
                         spine.set_linewidth(4)
-                
+
                 plt.gca().xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
                 plt.gca().yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
                 plt.gca().ticklabel_format(style='sci', axis='both', scilimits=(0,0))
-    
-                if i == 0 and j == 0:
-                    plt.legend(fontsize=8)
-    
-        plt.tight_layout()
+
+        plt.figtext(0.5, 0.01, r'$W^+$ Index $j$', ha='center', fontsize=22)
+        plt.figtext(0.01, 0.5, r'$W^-$ Index $i$', va='center', rotation='vertical', fontsize=22)
+        handles, labels = plt.gca().get_legend_handles_labels()
+        plt.figlegend(handles, labels, loc='upper right', fontsize=22)
+        plt.tight_layout(rect=[0.03, 0.03, 0.90, 0.97])
 
         # Create unique identifier based on current date and time
         current_datetime = datetime.now().strftime('%Y%m%d_%H%M%S')
