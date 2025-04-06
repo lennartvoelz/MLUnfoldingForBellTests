@@ -13,6 +13,8 @@ class DataPreprocessor:
     def load_data(self):
         raw_data_path = self.data_path
         self.data = pd.read_csv(raw_data_path)
+        # Only take first 50000 rows
+        self.data = self.data.head(50000)
 
     def process_features(self):
         lep0 = self.data[['p_l_1_E', 'p_l_1_x', 'p_l_1_y', 'p_l_1_z']]
@@ -66,7 +68,7 @@ class DataPreprocessor:
         self.X = self.X.assign(lep0_eta = self.eta(self.X['lep0_p'], self.X['p_l_1_z']))
         self.X = self.X.assign(lep1_eta = self.eta(self.X['lep1_p'], self.X['p_l_2_z']))
 
-        self.X = self.X[(self.X.lep0_pT > 22.0) & (self.X.lep1_pT > 15.0) & (self.X.lep0_eta < 2.47) & (self.X.lep1_eta < 2.47)]
+        self.X = self.X[(self.X.lep0_pT > 22.0) & (self.X.lep1_pT > 15.0) & (self.X.lep0_eta < 2.5) & (self.X.lep1_eta < 2.5)]
         self.y = self.y.loc[self.X.index]
         self.X = self.X.drop(columns=['lep0_pT', 'lep1_pT', 'lep0_p', 'lep1_p', 'lep0_eta', 'lep1_eta'])
 

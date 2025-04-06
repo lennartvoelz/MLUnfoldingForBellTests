@@ -59,7 +59,9 @@ class Baseline(LorentzVector):
         Returns:
             np.array or None: Solutions to the quadratic equation.
         """
+        #print(a, b, c)
         discriminant = b**2 - 4 * a * c
+        #print(discriminant)
         if discriminant < 0:
             return None
         elif discriminant == 0:
@@ -91,7 +93,7 @@ class Baseline(LorentzVector):
 
         return self.quadratic_formula(a, b, c)
 
-    def reconstruct_p_vv_z(self, M_H=124.97e3, M_vv=30e3):
+    def reconstruct_p_vv_z(self, M_H=125, M_vv=30):
         """
         Reconstructs the z-component of the di-neutrino four-momentum.
 
@@ -170,6 +172,37 @@ class Baseline(LorentzVector):
     # Seperate neutrino solutions
     # --------------------------------------
 
+    def restrictions(self):
+        p_vv_z = self.reconstruct_p_vv_z()
+        M_vv = 30
+        p_vv_x = self.mpx
+        p_vv_y = self.mpy
+        E_vv = self.di_neutrino_energy(M_vv, p_vv_z)
+        p4_vv = LorentzVector([E_vv, p_vv_x, p_vv_y, p_vv_z])
+        
+        #approach 2
+        p_miss = LorentzVector([self.mpt, self.mpx, self.mpy, 0])
+        #p_miss = p4_vv
+        dir_w1 = self.p4_lep0.get_momentum()/np.linalg.norm(self.p4_lep0.get_momentum()) + p_miss.get_momentum()/(np.linalg.norm(p_miss.get_momentum()) * 2)
+        p_abs_w1 = np.linalg.norm(self.p4_lep0.get_momentum() + p_miss.get_momentum()/2)
+        #p_abs_w1 = 35*10**3
+
+        E_W1 = np.sqrt(70**2 + p_abs_w1**2)
+        W1 = LorentzVector([E_W1, p_abs_w1*dir_w1[0], p_abs_w1*dir_w1[1], p_abs_w1*dir_w1[2]])
+
+        dir_w2 = self.p4_lep1.get_momentum()/np.linalg.norm(self.p4_lep1.get_momentum()) + p_miss.get_momentum()/(np.linalg.norm(p_miss.get_momentum()) * 2)
+        p_abs_w2 = np.linalg.norm(self.p4_lep1.get_momentum() + p_miss.get_momentum()/2)
+        #p_abs_w2 = 29*10**3
+
+        E_W2 = np.sqrt(39**2 + p_abs_w2**2)
+        W2 = LorentzVector([E_W2, p_abs_w2*dir_w2[0], p_abs_w2*dir_w2[1], p_abs_w2*dir_w2[2]])
+
+        p4_v_on = (p4_vv + self.p4_lep1 - self.p4_lep0 + W1 - W2)*0.5
+
+        p4_v_off = p4_vv - p4_v_on
+
+        return p4_v_on.to_numpy(), p4_v_off.to_numpy()
+
     def calculate_neutrino_solutions(self):
         if self.p4_lep0.get_pt() > self.p4_lep1.get_pt():
             p4_lep_onshell = self.p4_lep0
@@ -197,8 +230,8 @@ class Baseline(LorentzVector):
             square_root = 0
         M_vf = np.sqrt(square_root)
 
-        p_v_onshell = LorentzVector([0, alpha_squared * p_vv.get_momentum()[0], alpha_squared * p_vv.get_momentum()[1], alpha_squared * p_vv.get_momentum()[2]])
-        p_v_offshell = LorentzVector([M_vf, (1 - alpha_squared) * p_vv.get_momentum()[0], (1 - alpha_squared) * p_vv.get_momentum()[1], (1 - alpha_squared) * p_vv.get_momentum()[2]])
+        p_v_onshell = np.array([0, alpha_squared * p_vv.get_momentum()[0], alpha_squared * p_vv.get_momentum()[1], alpha_squared * p_vv.get_momentum()[2]])
+        p_v_offshell = np.array([M_vf, (1 - alpha_squared) * p_vv.get_momentum()[0], (1 - alpha_squared) * p_vv.get_momentum()[1], (1 - alpha_squared) * p_vv.get_momentum()[2]])
 
         if switched:
             # lep0 = p4_lep_offshell
@@ -211,4 +244,4 @@ class Baseline(LorentzVector):
             v0 = p_v_onshell
             v1 = p_v_offshell
 
-        return np.array([v0, v1])
+        return v0, v1

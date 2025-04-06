@@ -1,4 +1,5 @@
 import numpy as np
+import os
 
 class results:
     def __init__(self, truth, pred):
@@ -13,5 +14,8 @@ class results:
         return np.mean(self.calculate_mae_componentwise())
     
     def run(self, path):
+        print("Mean Absolute Error Componentwise: ", self.calculate_mae_componentwise())
         print("Mean Absolute Error: ", self.mae)
-        np.savetxt(path + "mae.txt", self.mae)
+        os.makedirs(path, exist_ok=True)
+        full_path = os.path.join(path, "mae.txt")
+        np.savetxt(full_path, [self.mae])

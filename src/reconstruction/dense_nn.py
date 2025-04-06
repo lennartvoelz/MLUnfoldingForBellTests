@@ -23,8 +23,13 @@ class DNN:
         self.l2_regularization = config['l2_regularization']
 
         # create a list of nodes according to the number of dense layers
-        half_layers = self.num_dense_layers // 2
-        self.nodes = [int(self.dense_nodes * (1 - abs(i - half_layers) / half_layers)) for i in range(self.num_dense_layers)]
+        min_nodes = self.dense_nodes // 2
+        self.nodes = [
+            int(min_nodes + (self.dense_nodes - min_nodes) * (1 - abs((2 * i) / (self.num_dense_layers - 1) - 1) ** 2))
+            for i in range(self.num_dense_layers)
+        ]
+
+        print(f"Nodes: {self.nodes}")
 
         self.model = self.build_model()
 
@@ -32,14 +37,14 @@ class DNN:
         input_layer = tf.keras.Input(shape=(self.input_shape, 1))
 
         x = tf.keras.layers.Flatten()(input_layer)
-        x = tf.keras.layers.Dense(self.nodes[0], activation=self.activation_functions[0])(x)
+        x = tf.keras.layers.Dense(self.nodes[0], activation=self.activation_functions)(x)
 
         # add dense layers based on num_dense_layers
         for i in range(1, self.num_dense_layers):
-            x = tf.keras.layers.Dense(self.nodes[i], activation=self.activation_functions[i],
-                                      kernel_regularizer=tf.keras.regularizers.l2(self.l2_regularization))(x)
-            if self.batch_normalization:
-                x = tf.keras.layers.BatchNormalization()(x)
+            x = tf.keras.layers.Dense(self.nodes[i], activation=self.activation_functions)(x)
+            if (i%2 == 0):
+                if self.batch_normalization:
+                    x = tf.keras.layers.BatchNormalization()(x)
             if self.dropout_rate > 0.0:
                 x = tf.keras.layers.Dropout(self.dropout_rate)(x)
 

@@ -1,15 +1,14 @@
-data_path: /mnt/c/Users/Lennart/Desktop/Studium/MLUnfoldingForBellTests/data/truth_finalstate.csv
+data_path: /mnt/c/Users/Lennart/Desktop/Studium/MLUnfoldingForBellTests/data/hww_simulated_final.csv
 
 input_shape: 10
 num_dense_layers: 8
-dense_nodes: 768
-activation_functions: relu
+dense_nodes: 1000
+activation_functions: elu
 output_activation: linear
 batch_normalization: True
-dropout_rate: 0.2
-l2_regularization: 0.003
-
-learning_rate: 0.0007
-batch_size: 256
+dropout_rate: 0.1
+l2_regularization: 0.0067008
+learning_rate: 0.0026858
+batch_size: 128
 epochs: 500
-early_stopping_patience: 20
+patience: 5
