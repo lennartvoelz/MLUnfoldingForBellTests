@@ -11,10 +11,10 @@ class I_3():
     # Precompute Gell-Mann matrices as class variables
     GMLIST = [None] * 8
 
-    def __init__(self, lep1, lep2, neutrino1, neutrino2, lep0_charge=-1):
-        self.update_data(lep1, lep2, neutrino1, neutrino2, lep0_charge)
+    def __init__(self, lep1, lep2, neutrino1, neutrino2, event_type=None, lep0_charge=-1):
+        self.update_data(lep1, lep2, neutrino1, neutrino2, event_type, lep0_charge)
 
-    def update_data(self, lep1, lep2, neutrino1, neutrino2, lep0_charge=-1):
+    def update_data(self, lep1, lep2, neutrino1, neutrino2, event_type, lep0_charge=-1):
         """
         Updates the data for the I_3 analysis.
 
@@ -23,12 +23,14 @@ class I_3():
             lep2 (LorentzVector): Second lepton.
             neutrino1 (LorentzVector): First neutrino.
             neutrino2 (LorentzVector): Second neutrino.
+            event_type (pandas.Series): defines type of the event
             lep0_charge (int): Charge of lep0 (default: -1).
         """
         self.lep1 = lep1
         self.lep2 = lep2
         self.neutrino1 = neutrino1
         self.neutrino2 = neutrino2
+        self.event_type = event_type
         self.lep0_charge = lep0_charge
         self.beam = LorentzVector([1, 0, 0, 1])
 
@@ -65,7 +67,9 @@ class I_3():
         Returns:
             int: 1 if lep0_charge > 0, else 2.
         """
-        return 1 if self.lep0_charge > 0 else 2
+        if self.event_type is None:
+            return 1 if self.lep0_charge > 0 else 2
+        return self.event_type
 
     def analysis_prep(self):
         """
@@ -98,7 +102,7 @@ class I_3():
         r = np.sqrt(1 - y**2)
         if r == 0:
             r = 0.0001
-        
+
         r_vec = (p - y * k) / r
         n = np.cross(p, k) / r
 

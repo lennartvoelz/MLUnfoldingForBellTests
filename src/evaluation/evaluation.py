@@ -7,13 +7,15 @@ import matplotlib.colors as mcolors
 from datetime import datetime
 import os
 from scipy import stats
-import dcor
+# import dcor
 from sklearn.feature_selection import mutual_info_regression
 
 class calculate_results():
-    def __init__(self, arrays, labels, title):
+    def __init__(self, arrays, labels, title, types=None):
         self.reconstructions = {label: array for label, array in zip(labels, arrays)}
         self.title = title
+        self.types = types
+
 
     def calculate_gellmann_coefficients(self, array):
         """
@@ -24,7 +26,7 @@ class calculate_results():
         lep2 = array[:,4:8]
         neutrino1 = array[:,8:12]
         neutrino2 = array[:,12:]
-        
+
         # Convert to LorentzVector objects
         lep1 = [LorentzVector(lep1[i], type="four-vector") for i in range(num_samples)]
         lep2 = [LorentzVector(lep2[i], type="four-vector") for i in range(num_samples)]
@@ -37,12 +39,21 @@ class calculate_results():
         cov_sym = np.zeros((num_samples, 8, 8))
 
         for i in range(num_samples):
-            I_3_obj = I_3(
-                lep1[i],
-                lep2[i],
-                neutrino1[i],
-                neutrino2[i]
-            )
+            if self.types is None:
+                I_3_obj = I_3(
+                    lep1[i],
+                    lep2[i],
+                    neutrino1[i],
+                    neutrino2[i]
+                )
+            else:
+                I_3_obj = I_3(
+                    lep1[i],
+                    lep2[i],
+                    neutrino1[i],
+                    neutrino2[i],
+                    self.types.iloc[i]
+                )
             pW1_event, pW2_event, cov_event, cov_sym_event = I_3_obj.analysis()
             pW1[i] = pW1_event
             pW2[i] = pW2_event
@@ -53,7 +64,7 @@ class calculate_results():
         cov_sym_2d = cov_sym
 
         return pW1, pW2, cov_2d, cov_sym_2d
-    
+
     def initialize_datasets(self):
         """
         Initializes datasets by calculating Gell-Mann coefficients for non-empty reconstructions
@@ -65,7 +76,7 @@ class calculate_results():
         self.pW2 = []
 
         color_map = plt.get_cmap('Set1')
-        
+
         for idx, (label, array) in enumerate(self.reconstructions.items()):
             pW1_num, pW2_num, cov_2d, cov_sym_2d = self.calculate_gellmann_coefficients(array)
             self.datasets.append(cov_2d)
@@ -73,7 +84,7 @@ class calculate_results():
             self.pW2.append(pW2_num)
             self.labels.append(label)
             self.colors.append(color_map(idx))
-    
+
     def plot_gellmann_coefficients(self, target_path):
         """
         Plots the Gellmann coefficients in a 8x8 grid
@@ -151,7 +162,7 @@ class calculate_results():
                     # Save the histogram data and bin edges for further analysis
                     data_and_edges = {'hist': hist, 'bins': bins}
                     # np.save(f'{target_path}histogram_data_{label}_{i}_{j}.npy', data_and_edges)
-                    
+
 
                 plt.ylim(0, plt.ylim()[1]*1.1)
 
@@ -199,7 +210,7 @@ class calculate_results():
                 for j in range(8):
                     plt.subplot(8, 8, i*8 + j + 1)
                     plt.scatter(pW1_num[:, i], pW2_num[:, j], s=0.5)
-            
+
                     if (i, j) in [(0, 2), (1, 1), (2, 0), (4, 3), (3, 4), (5, 2), (7, 5), (6, 6), (5, 7)]:
                         ax = plt.gca()
                         for spine in ax.spines.values():
@@ -218,7 +229,7 @@ class calculate_results():
             file_path = os.path.join(target_path, filename)
             plt.savefig(file_path)
             plt.close()
-    
+
     def calc_correlation(self, target_path):
         """
         Calculates the correlation between the Gell-Mann coefficients
@@ -233,7 +244,7 @@ class calculate_results():
             pearson_corr_matrix   = np.zeros((8, 8))
             spearman_corr_matrix  = np.zeros((8, 8))
             kendall_corr_matrix   = np.zeros((8, 8))
-                    
+
             for i in range(8):
                 for j in range(8):
                     col1 = pW1_num[:, i]
@@ -289,7 +300,7 @@ class calculate_results():
 
         plt.figure(figsize=(20, 20))
         plt.suptitle(f"{self.title}", fontsize=30)
-        
+
         for i in range(8):
             for j in range(8):
                 ax = plt.subplot(8, 8, i*8 + j + 1)
@@ -305,7 +316,7 @@ class calculate_results():
                     z_prod = zscore_pW1 * zscore_pW2
 
                     ax.hist(z_prod, bins=50, density=True, alpha=1, color=color, label=label, range=(-5, 5), histtype='step', linewidth=1.2)
-                
+
                 ax.set_ylim(0, ax.get_ylim()[1]*1.1)
 
                 if (i, j) in [(0, 2), (1, 1), (2, 0), (4, 3), (3, 4), (5, 2), (7, 5), (6, 6), (5, 7)]:
@@ -329,7 +340,7 @@ class calculate_results():
         plt.savefig(file_path)
         plt.close()
 
-        
+
     def run(self, target_path):
         self.initialize_datasets()
         self.plot_gellmann_coefficients(target_path)

@@ -10,7 +10,7 @@ config = yaml.safe_load(open('config.yaml'))
 
 data = DataPreprocessor(data_path=config['data_path'], cuts=True, splits=False)
 
-X, y = data.run_preprocessing()
+X, y, types = data.run_preprocessing()
 
 lep0 = X[:100000,:4]
 lep1 = X[:100000,4:8]
@@ -41,5 +41,5 @@ mae = results(y, y_pred)
 
 print(mae.run("results/analytical_reconstruction"))
 
-results_analytic = calculate_results([final_state, final_state_truth], ["Analytic Reconstruction", "Truth"], "Analytic Reconstruction Detector Simulation")
+results_analytic = calculate_results([final_state, final_state_truth], ["Analytic Reconstruction", "Truth"], "Analytic Reconstruction Detector Simulation", types)
 results_analytic.run("reports/analytic/")

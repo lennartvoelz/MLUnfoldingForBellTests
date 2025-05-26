@@ -20,7 +20,7 @@ config = yaml.safe_load(open('config.yaml'))
 
 data_preprocessor_detector_sim = DataPreprocessor(data_path="/mnt/c/Users/Lennart/Desktop/Studium/MLUnfoldingForBellTests/data/hww_simulated_final.csv", cuts=False)
 
-X_detector_sim_train, X_detector_sim_val, X_detector_sim_test, y_detector_sim_train, y_detector_sim_val, y_detector_sim_test = data_preprocessor_detector_sim.run_preprocessing()
+X_detector_sim_train, X_detector_sim_val, X_detector_sim_test, y_detector_sim_train, y_detector_sim_val, y_detector_sim_test, types = data_preprocessor_detector_sim.run_preprocessing()
 
 def create_model(hp):
     learning_rate = hp.Float('learning_rate', min_value=1e-5, max_value=1e-2)

@@ -1,4 +1,5 @@
-data_path: /mnt/c/Users/Lennart/Desktop/Studium/MLUnfoldingForBellTests/data/hww_simulated_final.csv
+data_path: data/hww_simulated_final.csv
+raw_data_path: data/hww_simulated.csv
 
 input_shape: 10
 num_dense_layers: 8
