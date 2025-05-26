@@ -175,8 +175,6 @@ class DataPreprocessor:
 
             df.to_csv(self.data_path, index=False)
 
-            self.types = df['Event.Type'].copy()
-
     def load_data(self):
         # raw_data_path = self.data_path
         self.data = pd.read_csv(self.data_path)
@@ -195,6 +193,8 @@ class DataPreprocessor:
             mpy = self.data[['mpy']]
 
         self.X = pd.concat([lep0, lep1, mpx, mpy], axis=1)
+
+        self.types = self.data['Event.Type'].copy()
 
     def process_targets(self):
         y1 = self.data[['p_v_1_E', 'p_v_1_x', 'p_v_1_y', 'p_v_1_z']]
