@@ -13,8 +13,8 @@ class DataPreprocessor:
     def load_data(self):
         raw_data_path = self.data_path
         self.data = pd.read_csv(raw_data_path)
-        # Only take first 50000 rows
-        self.data = self.data.head(50000)
+        # Only take first 100000 rows
+        self.data = self.data.head(100000)
 
     def process_features(self):
         lep0 = self.data[['p_l_1_E', 'p_l_1_x', 'p_l_1_y', 'p_l_1_z']]

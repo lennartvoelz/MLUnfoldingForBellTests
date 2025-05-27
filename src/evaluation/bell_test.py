@@ -2,7 +2,7 @@ import numpy as np
 from src.utils.lorentz_vector import LorentzVector
 
 
-class I_3():
+class I_3:
     """
     Class to perform analysis on lepton and neutrino events,
     calculating Wigner symbols and testing Bell inequalities.
@@ -38,8 +38,8 @@ class I_3():
 
         self.pW1 = np.zeros(8)
         self.pW2 = np.zeros(8)
-        self.cov = np.zeros((8, 8), dtype=float, order='C')
-        self.cov_sym = np.zeros((8, 8), dtype=float, order='C')
+        self.cov = np.zeros((8, 8), dtype=float, order="C")
+        self.cov_sym = np.zeros((8, 8), dtype=float, order="C")
 
     @staticmethod
     def _initialize_gellmann_matrices():
@@ -98,7 +98,7 @@ class I_3():
         r = np.sqrt(1 - y**2)
         if r == 0:
             r = 0.0001
-        
+
         r_vec = (p - y * k) / r
         n = np.cross(p, k) / r
 
@@ -140,7 +140,15 @@ class I_3():
         wig_1 = self.wig_neg(xi_x_1, xi_y_1, xi_z_1)  # Lepton -
         wig_2 = self.wig_plus(xi_x_2, xi_y_2, xi_z_2)  # Lepton +
 
-        vars = np.array([lab_1, lab_2, lab_3, lab_4])
+        # Also save angles cos(theta) and phi
+        cos_theta_1 = xi_z_1
+        cos_theta_2 = xi_z_2
+        phi_1 = np.arctan2(xi_y_1, xi_x_1)
+        phi_2 = np.arctan2(xi_y_2, xi_x_2)
+        phi_1 = np.mod(phi_1, 2 * np.pi)
+        phi_2 = np.mod(phi_2, 2 * np.pi)
+
+        vars = np.array([phi_1, phi_2, cos_theta_1, cos_theta_2])
 
         return wig_1, wig_2, vars
 
@@ -151,7 +159,7 @@ class I_3():
         Returns:
             tuple: Updated pW1, pW2, cov, cov_sym arrays.
         """
-        pW1_event, pW2_event, _ = self.analysis_prep()
+        pW1_event, pW2_event, angles = self.analysis_prep()
 
         # Update Wigner symbol sums
         self.pW1 += pW1_event
@@ -160,9 +168,13 @@ class I_3():
         for i in range(8):
             for j in range(8):
                 self.cov[i][j] = self.cov[i][j] + (pW2_event[i] * pW1_event[j])
-                self.cov_sym[i][j] = self.cov_sym[i][j] + (pW2_event[i] * pW1_event[j]) + (pW2_event[j] * pW1_event[i])
+                self.cov_sym[i][j] = (
+                    self.cov_sym[i][j]
+                    + (pW2_event[i] * pW1_event[j])
+                    + (pW2_event[j] * pW1_event[i])
+                )
 
-        return self.pW1, self.pW2, self.cov, self.cov_sym
+        return self.pW1, self.pW2, self.cov, self.cov_sym, angles
 
     @staticmethod
     def gellmann(j, k, d):
@@ -186,7 +198,9 @@ class I_3():
             gjkd[j - 1, k - 1] = -1j
             gjkd[k - 1, j - 1] = 1j
         elif j == k and j < d:
-            diag_elements = [1 if n <= j else -j if n == (j + 1) else 0 for n in range(1, d + 1)]
+            diag_elements = [
+                1 if n <= j else -j if n == (j + 1) else 0 for n in range(1, d + 1)
+            ]
             factor = np.sqrt(2 / (j * (j + 1)))
             gjkd = factor * np.diag(diag_elements)
         else:
@@ -216,16 +230,18 @@ class I_3():
         term5 = 10 * etax * etay
         term6 = (0.25 / np.sqrt(3)) * (12 * etaz - 15 * cos2theta - 5)
 
-        wig_plus_event = np.array([
-            term1 * etax,
-            term1 * etay,
-            term3,
-            term4,
-            term5,
-            term2 * etax,
-            term2 * etay,
-            term6
-        ])
+        wig_plus_event = np.array(
+            [
+                term1 * etax,
+                term1 * etay,
+                term3,
+                term4,
+                term5,
+                term2 * etax,
+                term2 * etay,
+                term6,
+            ]
+        )
 
         return wig_plus_event
 
@@ -252,16 +268,18 @@ class I_3():
         term5 = 10 * etax * etay
         term6 = (0.25 / np.sqrt(3)) * (-12 * etaz - 15 * cos2theta - 5)
 
-        wig_minus_event = np.array([
-            term1 * etax,
-            term1 * etay,
-            term3,
-            term4,
-            term5,
-            term2 * etax,
-            term2 * etay,
-            term6
-        ])
+        wig_minus_event = np.array(
+            [
+                term1 * etax,
+                term1 * etay,
+                term3,
+                term4,
+                term5,
+                term2 * etax,
+                term2 * etay,
+                term6,
+            ]
+        )
 
         return wig_minus_event
 
@@ -277,7 +295,11 @@ class I_3():
             float: Expectation value of the Bell operator.
         """
         sqrt3 = np.sqrt(3)
-        term = (sqrt3 * (gmarray[0, 0] + gmarray[0, 5] + gmarray[1, 1] + gmarray[1, 6]) -3 * (gmarray[3, 3] + gmarray[4, 4]) + sqrt3 * (gmarray[5, 0] + gmarray[5, 5] + gmarray[6, 1] + gmarray[6, 6]))
+        term = (
+            sqrt3 * (gmarray[0, 0] + gmarray[0, 5] + gmarray[1, 1] + gmarray[1, 6])
+            - 3 * (gmarray[3, 3] + gmarray[4, 4])
+            + sqrt3 * (gmarray[5, 0] + gmarray[5, 5] + gmarray[6, 1] + gmarray[6, 6])
+        )
         bell_value = -(4 / 3) * term
         return bell_value
 

@@ -39,7 +39,7 @@ final_state_truth = np.concatenate((lep0, lep1, y), axis=1)
 
 mae = results(y, y_pred)
 
-print(mae.run("results/analytical_reconstruction"))
+print(mae.run("reports/analytic_ww_cuts/"))
 
-results_analytic = calculate_results([final_state, final_state_truth], ["Analytic Reconstruction", "Truth"], "Analytic Reconstruction Detector Simulation")
-results_analytic.run("reports/analytic/")
+results_analytic = calculate_results([final_state, final_state_truth], ["Analytic Reconstruction", "Truth"], "Analytic Reconstruction WW + Cuts")
+results_analytic.run("reports/analytic_ww_cuts_truth/")

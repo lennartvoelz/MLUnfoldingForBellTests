@@ -12,7 +12,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 
 config = yaml.safe_load(open('config.yaml'))
 
-data_preprocessor_detector_sim = DataPreprocessor(data_path=config["data_path"], cuts=True)
+data_preprocessor_detector_sim = DataPreprocessor(data_path=config["data_path"], cuts=False)
 
 X_detector_sim_train, X_detector_sim_val, X_detector_sim_test, y_detector_sim_train, y_detector_sim_val, y_detector_sim_test = data_preprocessor_detector_sim.run_preprocessing()
 
@@ -36,5 +36,5 @@ final_state_detector_sim_truth = np.concatenate((X_detector_sim_test[:,:8], y_de
 dense_net.model.save('models/dnn_detector_sim.keras')
 
 # Save final state to csv
-# np.savetxt("data/dnn_detector_sim_final_state.csv", final_state_detector_sim)
-# np.savetxt("data/dnn_detector_sim_final_state_truth.csv", final_state_detector_sim_truth)
+np.savetxt("data/dnn_final_state_ww.csv", final_state_detector_sim)
+np.savetxt("data/dnn_final_state_ww_truth.csv", final_state_detector_sim_truth)
