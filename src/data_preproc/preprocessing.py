@@ -23,7 +23,7 @@ class DataPreprocessor:
         :param ids: list containing id numbers of required particles.
         :returns type: Bool True if all ids in array exactly once.
         """
-        type = False
+        event_type = False
         type_count = 0
         # Require all particles to appear once only
         for id in ids:
@@ -31,8 +31,8 @@ class DataPreprocessor:
                 type_count +=1
         # Require all particles to be present
         if type_count == len(ids):
-            type = True
-        return type
+            event_type = True
+        return event_type
 
     def get_event_type(self, array):
         # Define type-1 decays to be to electron and anti-muon, and type-2 decays to be to positron and muon
@@ -212,11 +212,14 @@ class DataPreprocessor:
         self.X.to_csv(features_path, index=False)
         self.y.to_csv(targets_path, index=False)
 
-    def create_split(self):
+    def create_split(self, return_numpy=True):
         X_train, X_temp, y_train, y_temp = train_test_split(self.X, self.y, test_size=0.2, random_state=42)
         X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
-
-        return X_train.to_numpy(), X_val.to_numpy(), X_test.to_numpy(), y_train.to_numpy(), y_val.to_numpy(), y_test.to_numpy()
+        print("Here!")
+        if return_numpy:
+            return X_train.to_numpy(), X_val.to_numpy(), X_test.to_numpy(), y_train.to_numpy(), y_val.to_numpy(), y_test.to_numpy()
+        else:
+            return X_train, X_val, X_test, y_train, y_val, y_test
 
     def p_T(self, lep_x, lep_y):
         return np.sqrt(lep_x**2 + lep_y**2)
@@ -266,7 +269,8 @@ class DataPreprocessor:
         if self.processed_features_path and self.processed_targets_path:
             self.save_data()
         if self.splits:
-            return self.create_split(), self.types
+            X_train, X_val, X_test, y_train, y_val, y_test = self.create_split(return_numpy)
+            return X_train, X_val, X_test, y_train, y_val, y_test, self.types
         else:
             if return_numpy:
                 return self.X.to_numpy(), self.y.to_numpy(), self.types
