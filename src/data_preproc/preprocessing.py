@@ -227,7 +227,7 @@ class DataPreprocessor:
     def eta(self, p, pz):
         return np.abs(1/2 * np.log((p + pz)/(p - pz)))
 
-    def apply_selection_cuts(self):
+    def apply_selection_cuts(self, use_event_type=False):
         self.X = self.X.assign(lep0_pT = self.p_T(self.X['p_l_1_x'], self.X['p_l_1_y']))
         self.X = self.X.assign(lep1_pT = self.p_T(self.X['p_l_2_x'], self.X['p_l_2_y']))
         self.X = self.X.assign(lep0_p = self.p(self.X['p_l_1_x'], self.X['p_l_1_y'], self.X['p_l_1_z']))
@@ -235,8 +235,24 @@ class DataPreprocessor:
         self.X = self.X.assign(lep0_eta = self.eta(self.X['lep0_p'], self.X['p_l_1_z']))
         self.X = self.X.assign(lep1_eta = self.eta(self.X['lep1_p'], self.X['p_l_2_z']))
 
-        self.X = self.X[(self.X.lep0_pT > 22.0) & (self.X.lep1_pT > 10.0) & (self.X.lep0_eta < 2.5) & (self.X.lep1_eta < 2.47)]
+        # Either use Event.Type to differentiate between electron and muon
+        if use_event_type:
+            # Common cut
+            mask = (self.X.lep0_pT > 22.0) & (self.X.lep1_pT > 10.0)
+
+            # Conditional cuts based on Event.Type
+            type1_mask = (self.X['Event.Type'] == 1) & (self.X.lep0_eta < 2.47) & (self.X.lep1_eta < 2.5)
+            type2_mask = (self.X['Event.Type'] == 2) & (self.X.lep0_eta < 2.5) & (self.X.lep1_eta < 2.47)
+
+            full_mask = mask & (type1_mask | type2_mask)
+
+            self.X = self.X[full_mask].copy()
+        # Or do not and use 2.5
+        else:
+            self.X = self.X[(self.X.lep0_pT > 22.0) & (self.X.lep1_pT > 10.0) & (self.X.lep0_eta < 2.5) & (self.X.lep1_eta < 2.5)]
+
         self.y = self.y.loc[self.X.index]
+
         self.X = self.X.drop(columns=['lep0_pT', 'lep1_pT', 'lep0_p', 'lep1_p', 'lep0_eta', 'lep1_eta'])
 
     def run_preprocessing(self) -> tuple:
