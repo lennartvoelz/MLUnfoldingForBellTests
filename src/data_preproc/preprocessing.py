@@ -6,13 +6,15 @@ from sklearn.model_selection import train_test_split
 from ast import literal_eval
 
 class DataPreprocessor:
-    def __init__(self, raw_data_path, data_path, processed_features_path=None, processed_targets_path=None, cuts=True, splits=True):
+    def __init__(self, raw_data_path, data_path, processed_features_path=None,
+                 processed_targets_path=None, cuts=True, splits=True, mass_matching=False):
         self.data_path = data_path
         self.raw_data_path = raw_data_path
         self.processed_features_path = processed_features_path
         self.processed_targets_path = processed_targets_path
         self.cuts = cuts
         self.splits = splits
+        self.mass_matching = mass_matching
 
     def event_type(self, array, ids):
         """
@@ -111,6 +113,7 @@ class DataPreprocessor:
             df["Neutrino_2.y"] = df_truth["v2_p_y"]
             df["Neutrino_2.z"] = df_truth["v2_p_z"]
 
+            df = df.dropna(how='any').copy()
             # To infer which lepton does each neutrino associated with, we can consider 2 combinations
             #
             # A: $(l_1,v_1)$ and $(l_2,v_2)$
@@ -122,8 +125,7 @@ class DataPreprocessor:
             # where $M_{Wi} = \sqrt{(E_1 + E_2)^2 + (p_{x1} + p_{x2})^2 + (p_{y1} + p_{y2})^2 + (p_{z1} + p_{z2})^2}$ . Indexes refer to the first and second particle in the lepton-neutroni pair.
             #
             # Then we select combination with lesser delta.
-            matched = True
-            if not matched:
+            if not self.mass_matching:
                 def get_mass (E1, x1, y1, z1, E2, x2, y2, z2):
                     return np.sqrt((E1 + E2)**2 + (x1 + x2)**2 + (y1 + y2)**2 + (z1 + z2)**2)
 
@@ -146,8 +148,6 @@ class DataPreprocessor:
                 B_mass1
 
                 df['Delta2'] = np.abs(B_mass1 - W_mass) + np.abs(B_mass2 - W_mass)
-
-                df = df.dropna(how='any').copy()
 
                 condition = df["Delta1"] < df["Delta2"]
 
@@ -255,7 +255,7 @@ class DataPreprocessor:
 
         self.X = self.X.drop(columns=['lep0_pT', 'lep1_pT', 'lep0_p', 'lep1_p', 'lep0_eta', 'lep1_eta'])
 
-    def run_preprocessing(self) -> tuple:
+    def run_preprocessing(self,return_numpy=True) -> tuple:
         self.extract_data()
         self.load_data()
         self.process_features()
@@ -268,4 +268,7 @@ class DataPreprocessor:
         if self.splits:
             return self.create_split(), self.types
         else:
-            return self.X.to_numpy(), self.y.to_numpy(), self.types
+            if return_numpy:
+                return self.X.to_numpy(), self.y.to_numpy(), self.types
+            else:
+                return self.X, self.y, self.types
