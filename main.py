@@ -8,7 +8,7 @@ import numpy as np
 
 config = yaml.safe_load(open('config.yaml'))
 
-data = DataPreprocessor(data_path=config['data_path'], raw_data_path=config['raw_data_path'], cuts=True, splits=False)
+data = DataPreprocessor(data_path=config['data_path'], raw_data_path=config['raw_data_path'], cuts=False, splits=False)
 
 X, y, types = data.run_preprocessing()
 
