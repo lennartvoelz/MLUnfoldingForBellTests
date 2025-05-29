@@ -12,7 +12,7 @@ from src.data_preproc.preprocessing import DataPreprocessor
 with open('config.yaml', 'r') as file:
     config = yaml.safe_load(file)
 
-data = DataPreprocessor(data_path=config['data_path'], raw_data_path=config['raw_data_path'], cuts=True, splits=True)
+data = DataPreprocessor(data_path=config['data_path'], raw_data_path=config['raw_data_path'], cuts=False, splits=True, drop_zeroes=True)
 
 X_train, X_val, X_test, y_train, y_val, y_test, types = data.run_preprocessing()
 
@@ -27,8 +27,8 @@ y_pred = dense_net.predict(X_test)
 final_state = np.concatenate((X_test[:,:8], y_pred), axis=1)
 final_state_truth = np.concatenate((X_test[:,:8], y_test), axis=1)
 
-results_nn = calculate_results([final_state, final_state_truth], ["NN Regression", "Truth"], "Detector Simulation", types)
-results_nn.run("reports/nn_detector_cuts/")
+results_nn = calculate_results([final_state, final_state_truth], ["NN Regression", "Truth"], "NN Reconstruction Detector Simulation", types)
+results_nn.run("reports/nn_detector/")
 
 results_nn_mae = results(final_state_truth[:,8:], final_state[:,8:])
-results_nn_mae.run("reports/nn_detector_cuts/")
+results_nn_mae.run("reports/nn_detector/")

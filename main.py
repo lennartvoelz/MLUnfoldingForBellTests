@@ -16,5 +16,5 @@ X = X[:,:8]
 
 final_state = np.concatenate((X, y), axis=1)
 
-results_truth = calculate_results([final_state], ["Truth"], "Truth Detector Simulation",types)
-results_truth.run("reports/truth_detector_cuts/")
+results_truth = calculate_results([final_state], ["Truth"], "Truth Detector Simulation", types)
+results_truth.run("reports/truth_detector/")

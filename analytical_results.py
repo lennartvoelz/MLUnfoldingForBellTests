@@ -8,7 +8,7 @@ import numpy as np
 
 config = yaml.safe_load(open('config.yaml'))
 
-data = DataPreprocessor(data_path=config['data_path'], raw_data_path=config['raw_data_path'], cuts=True, splits=False)
+data = DataPreprocessor(data_path=config['data_path'], raw_data_path=config['raw_data_path'], cuts=False, splits=False, drop_zeroes=True)
 
 X, y, types = data.run_preprocessing()
 
@@ -24,7 +24,6 @@ lep1 = X[:,4:8]
 mpx = X[:,8]
 mpy = X[:,9]
 
-y = y[:]
 
 nu_1 = np.zeros((len(lep0), 4))
 nu_2 = np.zeros((len(lep0), 4))

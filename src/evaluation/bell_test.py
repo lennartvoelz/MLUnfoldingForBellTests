@@ -292,7 +292,7 @@ class I_3():
         Returns:
             tuple: lab_1, lab_2, lab_3, lab_4 (LorentzVectors).
         """
-        if self.get_type() == 1:
+        if self.get_type() == 0:
             lab_1 = self.lep2  # Electron
             lab_2 = self.lep1  # Anti-muon
             lab_3 = self.neutrino1  # Muon-neutrino

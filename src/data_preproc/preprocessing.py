@@ -3,185 +3,93 @@ import os
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from ast import literal_eval
+from src.utils.change_of_coordinates import exp_to_four_vec
 
 class DataPreprocessor:
     def __init__(self, raw_data_path, data_path, processed_features_path=None,
-                 processed_targets_path=None, cuts=True, splits=True, mass_matching=False):
+                 processed_targets_path=None, detector_sim_path=None, truth_path=None,
+                 cuts=True, splits=True, drop_zeroes=False):
         self.data_path = data_path
         self.raw_data_path = raw_data_path
         self.processed_features_path = processed_features_path
         self.processed_targets_path = processed_targets_path
         self.cuts = cuts
         self.splits = splits
-        self.mass_matching = mass_matching
-
-    def event_type(self, array, ids):
-        """
-        Determines event type by specifying all particles in a specific array must occur exactly once.
-        :param array: array containing particle ids in event.
-        :param ids: list containing id numbers of required particles.
-        :returns type: Bool True if all ids in array exactly once.
-        """
-        event_type = False
-        type_count = 0
-        # Require all particles to appear once only
-        for id in ids:
-            if np.sum(array == id) == 1:
-                type_count +=1
-        # Require all particles to be present
-        if type_count == len(ids):
-            event_type = True
-        return event_type
-
-    def get_event_type(self, array):
-        # Define type-1 decays to be to electron and anti-muon, and type-2 decays to be to positron and muon
-        ids_1 = [-13, 14, 11, -12]
-        ids_2 = [13, -14, -11, 12]
-
-        if self.event_type(np.array(array), ids_1):
-            return 1
-        elif self.event_type(np.array(array), ids_2):
-            return 2
-        return np.nan
+        self.drop_zeroes = drop_zeroes
+        self.detector_sim_path = detector_sim_path
+        self.truth_path = truth_path
+        self.types = None
 
     def extract_data(self):
-        if not os.path.exists(self.data_path):
-            # Read raw data
-            df = pd.read_csv(self.raw_data_path)
-
-            df.drop(columns=["Particle.PT", "Particle.Eta", "Particle.Phi"], inplace=True)
-
+        if not os.path.exists(self.data_path + '.csv'):
             # From: https://cernbox.cern.ch/files/link/public/Ju7DYsj0y8sQe2j?tiles-size=1&items-per-page=100&view-mode=resource-table
-            df = pd.read_csv("data/hww_simulated.csv")
-            df.drop(columns=["Particle.PT", "Particle.Eta", "Particle.Phi"], inplace=True)
+            df = pd.read_csv(self.raw_data_path + '.csv', dtype=np.float64)
 
-            # Interpret list of values as list, save 4 last values and explode into 4 columns; replace with type
-            df['Particle.PID'] = df['Particle.PID'].replace(r"  ", r", ", regex=True)
-            df['Particle.PID'] = df['Particle.PID'].replace(r" -", r", -", regex=True)
-            df['Particle.PID'] = df['Particle.PID'].replace(r"\[ ", r"[", regex=True)
-            df['Particle.PID'] = df['Particle.PID'].apply(literal_eval)
-            df['Particle.PID'] = df['Particle.PID'].apply(lambda x: x[-4:])
+            df['Event.Type'] = df['case'].copy()
+            df.drop(columns=['case'], inplace=True)
 
-            # Apply literal_eval to each of the first 9 columns except PID
-            for col in df.columns[1:]:
-                df[col] = df[col].apply(literal_eval)
-                df[col] = df[col].apply(lambda x: x[0] if len(x) > 0 else np.nan)
-            df
-
-            from src.utils.change_of_coordinates import exp_to_four_vec
-
+            # Detector simulation
             df[['Electron.E', 'Electron.px', 'Electron.py', 'Electron.pz']] = df.apply(
-                lambda row: pd.Series(exp_to_four_vec(row['Electron.PT'], row['Electron.Eta'], row['Electron.Phi'], 0.000511)), axis=1)
-
+                lambda row: pd.Series(exp_to_four_vec(row['e_pt'], row['e_eta'], row['e_phi'], 0.000511)), axis=1)
             df[['Muon.E', 'Muon.px', 'Muon.py', 'Muon.pz']] = df.apply(
-                lambda row: pd.Series(exp_to_four_vec(row['Muon.PT'], row['Muon.Eta'], row['Muon.Phi'], 0.10566)), axis=1)
-
-            df['Event.Type'] = df['Particle.PID'].apply(self.get_event_type)
-            df
+                lambda row: pd.Series(exp_to_four_vec(row['mu_pt'], row['mu_eta'], row['mu_phi'], 0.10566)), axis=1)
+            # Truth
+            df[['Truth.Electron.E', 'Truth.Electron.px', 'Truth.Electron.py', 'Truth.Electron.pz']] = df.apply(
+                lambda row: pd.Series(exp_to_four_vec(row['truth_e_pt'], row['truth_e_eta'], row['truth_e_phi'], 0.000511)), axis=1)
+            df[['Truth.Muon.E', 'Truth.Muon.px', 'Truth.Muon.py', 'Truth.Muon.pz']] = df.apply(
+                lambda row: pd.Series(exp_to_four_vec(row['truth_mu_pt'], row['truth_mu_eta'], row['truth_mu_phi'], 0.10566)), axis=1)
+            # Truth neutrinos
+            df[['Truth.Neutrino.Electron.E', 'Truth.Neutrino.Electron.px', 'Truth.Neutrino.Electron.py', 'Truth.Neutrino.Electron.pz']] = df.apply(
+                lambda row: pd.Series(exp_to_four_vec(row['truth_ve_pt'], row['truth_ve_eta'], row['truth_ve_phi'], 0.000511)), axis=1)
+            df[['Truth.Neutrino.Muon.E', 'Truth.Neutrino.Muon.px', 'Truth.Neutrino.Muon.py', 'Truth.Neutrino.Muon.pz']] = df.apply(
+                lambda row: pd.Series(exp_to_four_vec(row['truth_vmu_pt'], row['truth_vmu_eta'], row['truth_vmu_phi'], 0.10566)), axis=1)
 
             # l1 has highest p_T
+            # Detector simulation
+            df["p_l_1_E"] = df.apply(lambda row: row["Electron.E"] if row["e_pt"] > row["mu_pt"] else row["Muon.E"], axis=1)
+            df["p_l_1_x"] = df.apply(lambda row: row["Electron.px"] if row["e_pt"] > row["mu_pt"] else row["Muon.px"], axis=1)
+            df["p_l_1_y"] = df.apply(lambda row: row["Electron.py"] if row["e_pt"] > row["mu_pt"] else row["Muon.py"], axis=1)
+            df["p_l_1_z"] = df.apply(lambda row: row["Electron.pz"] if row["e_pt"] > row["mu_pt"] else row["Muon.pz"], axis=1)
+            df["p_l_2_E"] = df.apply(lambda row: row["Muon.E"] if row["e_pt"] > row["mu_pt"] else row["Electron.E"], axis=1)
+            df["p_l_2_x"] = df.apply(lambda row: row["Muon.px"] if row["e_pt"] > row["mu_pt"] else row["Electron.px"], axis=1)
+            df["p_l_2_y"] = df.apply(lambda row: row["Muon.py"] if row["e_pt"] > row["mu_pt"] else row["Electron.py"], axis=1)
+            df["p_l_2_z"] = df.apply(lambda row: row["Muon.pz"] if row["e_pt"] > row["mu_pt"] else row["Electron.pz"], axis=1)
+            # Truth
+            df["p_l_1_E_truth"] = df.apply(lambda row: row["Truth.Electron.E"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Muon.E"], axis=1)
+            df["p_l_1_x_truth"] = df.apply(lambda row: row["Truth.Electron.px"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Muon.px"], axis=1)
+            df["p_l_1_y_truth"] = df.apply(lambda row: row["Truth.Electron.py"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Muon.py"], axis=1)
+            df["p_l_1_z_truth"] = df.apply(lambda row: row["Truth.Electron.pz"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Muon.pz"], axis=1)
+            df["p_l_2_E_truth"] = df.apply(lambda row: row["Truth.Muon.E"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Electron.E"], axis=1)
+            df["p_l_2_x_truth"] = df.apply(lambda row: row["Truth.Muon.px"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Electron.px"], axis=1)
+            df["p_l_2_y_truth"] = df.apply(lambda row: row["Truth.Muon.py"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Electron.py"], axis=1)
+            df["p_l_2_z_truth"] = df.apply(lambda row: row["Truth.Muon.pz"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Electron.pz"], axis=1)
+            # Truth neutrino
+            df["p_v_1_E_truth"] = df.apply(lambda row: row["Truth.Neutrino.Electron.E"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Neutrino.Muon.E"], axis=1)
+            df["p_v_1_x_truth"] = df.apply(lambda row: row["Truth.Neutrino.Electron.px"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Neutrino.Muon.px"], axis=1)
+            df["p_v_1_y_truth"] = df.apply(lambda row: row["Truth.Neutrino.Electron.py"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Neutrino.Muon.py"], axis=1)
+            df["p_v_1_z_truth"] = df.apply(lambda row: row["Truth.Neutrino.Electron.pz"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Neutrino.Muon.pz"], axis=1)
+            df["p_v_2_E_truth"] = df.apply(lambda row: row["Truth.Neutrino.Muon.E"] if row["truth_e_pt"] > row["truth_mu_pt"] else  row["Truth.Neutrino.Electron.E"], axis=1)
+            df["p_v_2_x_truth"] = df.apply(lambda row: row["Truth.Neutrino.Muon.px"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Neutrino.Electron.px"], axis=1)
+            df["p_v_2_y_truth"] = df.apply(lambda row: row["Truth.Neutrino.Muon.py"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Neutrino.Electron.py"], axis=1)
+            df["p_v_2_z_truth"] = df.apply(lambda row: row["Truth.Neutrino.Muon.pz"] if row["truth_e_pt"] > row["truth_mu_pt"] else row["Truth.Neutrino.Electron.pz"], axis=1)
+            df.drop(columns=["Electron.E", "Electron.px", "Electron.py", "Electron.pz", "Muon.E", "Muon.px", "Muon.py", "Muon.pz", "e_pt", "e_eta", "e_phi", "mu_pt", "mu_eta", "mu_phi",
+                             "Truth.Electron.E", "Truth.Electron.px", "Truth.Electron.py", "Truth.Electron.pz", "Truth.Muon.E", "Truth.Muon.px", "Truth.Muon.py", "Truth.Muon.pz", "truth_e_pt", "truth_e_eta", "truth_e_phi", "truth_mu_pt", "truth_mu_eta", "truth_mu_phi",
+                             "Truth.Neutrino.Electron.E", "Truth.Neutrino.Electron.px", "Truth.Neutrino.Electron.py", "Truth.Neutrino.Electron.pz", "Truth.Neutrino.Muon.E", "Truth.Neutrino.Muon.px", "Truth.Neutrino.Muon.py", "Truth.Neutrino.Muon.pz", "truth_ve_pt", "truth_ve_eta", "truth_ve_phi", "truth_vmu_pt", "truth_vmu_eta", "truth_vmu_phi"], inplace=True)
 
-            df["p_l_1_E"] = df.apply(lambda row: row["Electron.E"] if row["Electron.PT"] > row["Muon.PT"] else row["Muon.E"], axis=1)
-            df["p_l_1_x"] = df.apply(lambda row: row["Electron.px"] if row["Electron.PT"] > row["Muon.PT"] else row["Muon.px"], axis=1)
-            df["p_l_1_y"] = df.apply(lambda row: row["Electron.py"] if row["Electron.PT"] > row["Muon.PT"] else row["Muon.py"], axis=1)
-            df["p_l_1_z"] = df.apply(lambda row: row["Electron.pz"] if row["Electron.PT"] > row["Muon.PT"] else row["Muon.pz"], axis=1)
+            df["mpx"] = df.apply(lambda row: row["met"] * np.cos(row["met_phi"]), axis=1)
+            df["mpy"] = df.apply(lambda row: row["met"] * np.sin(row["met_phi"]), axis=1)
 
-            df["p_l_2_E"] = df.apply(lambda row: row["Muon.E"] if row["Electron.PT"] > row["Muon.PT"] else row["Electron.E"], axis=1)
-            df["p_l_2_x"] = df.apply(lambda row: row["Muon.px"] if row["Electron.PT"] > row["Muon.PT"] else row["Electron.px"], axis=1)
-            df["p_l_2_y"] = df.apply(lambda row: row["Muon.py"] if row["Electron.PT"] > row["Muon.PT"] else row["Electron.py"], axis=1)
-            df["p_l_2_z"] = df.apply(lambda row: row["Muon.pz"] if row["Electron.PT"] > row["Muon.PT"] else row["Electron.pz"], axis=1)
+            df.drop(columns=["met", "met_eta", "met_phi"], inplace=True)
 
-            df.drop(columns=["Electron.E", "Electron.px", "Electron.py", "Electron.pz", "Muon.E", "Muon.px", "Muon.py", "Muon.pz", "Particle.PID", "Electron.PT", "Electron.Eta", "Electron.Phi", "Muon.PT", "Muon.Eta", "Muon.Phi"], inplace=True)
-
-
-            df["mpx"] = df.apply(lambda row: row["MissingET.MET"] * np.cos(row["MissingET.Phi"]), axis=1)
-            df["mpy"] = df.apply(lambda row: row["MissingET.MET"] * np.sin(row["MissingET.Phi"]), axis=1)
-
-            df.drop(columns=["MissingET.MET", "MissingET.Phi", "MissingET.Eta"], inplace=True)
-
-            # From https://cernbox.cern.ch/files/link/public/Ju7DYsj0y8sQe2j?tiles-size=1&items-per-page=100&view-mode=resource-table
-            # Extracted csv from output_tlvs.root
-            df_truth = pd.read_csv("data/df_final.csv")
-
-            df["Neutrino_1.E"] = df_truth["v1_E"]
-            df["Neutrino_1.x"] = df_truth["v1_p_x"]
-            df["Neutrino_1.y"] = df_truth["v1_p_y"]
-            df["Neutrino_1.z"] = df_truth["v1_p_z"]
-            df["Neutrino_2.E"] = df_truth["v2_E"]
-            df["Neutrino_2.x"] = df_truth["v2_p_x"]
-            df["Neutrino_2.y"] = df_truth["v2_p_y"]
-            df["Neutrino_2.z"] = df_truth["v2_p_z"]
-
-            df = df.dropna(how='any').copy()
-            # To infer which lepton does each neutrino associated with, we can consider 2 combinations
-            #
-            # A: $(l_1,v_1)$ and $(l_2,v_2)$
-            #
-            # B: $(l_1,v_2)$ and $(l_2,v_1)$
-            #
-            # For each variant we can compute mass of reconstruced W boson and compare with to known physical mass of 80.4. Therefore for each combination following metric is calculated:
-            # $$ \varDelta = |M_{W1} - 80.4| + |M_{W2} - 80.4| ,$$
-            # where $M_{Wi} = \sqrt{(E_1 + E_2)^2 + (p_{x1} + p_{x2})^2 + (p_{y1} + p_{y2})^2 + (p_{z1} + p_{z2})^2}$ . Indexes refer to the first and second particle in the lepton-neutroni pair.
-            #
-            # Then we select combination with lesser delta.
-            if not self.mass_matching:
-                def get_mass (E1, x1, y1, z1, E2, x2, y2, z2):
-                    return np.sqrt((E1 + E2)**2 + (x1 + x2)**2 + (y1 + y2)**2 + (z1 + z2)**2)
-
-                W_mass = 80.4
-
-                # A
-                A_mass1 = get_mass(df['p_l_1_E'],      df['p_l_1_x'],      df['p_l_1_y'],      df['p_l_1_z'],
-                                   df['Neutrino_1.E'], df['Neutrino_1.x'], df['Neutrino_1.y'], df['Neutrino_1.z'])
-                A_mass2 = get_mass(df['p_l_2_E'],      df['p_l_2_x'],      df['p_l_2_y'],      df['p_l_2_z'],
-                                   df['Neutrino_2.E'], df['Neutrino_2.x'], df['Neutrino_2.y'], df['Neutrino_2.z'])
-                A_mass1
-
-                df['Delta1'] = np.abs(A_mass1 - W_mass) + np.abs(A_mass2 - W_mass)
-
-                # B
-                B_mass1 = get_mass(df['p_l_1_E'],      df['p_l_1_x'],      df['p_l_1_y'],      df['p_l_1_z'],
-                                   df['Neutrino_2.E'], df['Neutrino_2.x'], df['Neutrino_2.y'], df['Neutrino_2.z'])
-                B_mass2 = get_mass(df['p_l_2_E'],      df['p_l_2_x'],      df['p_l_2_y'],      df['p_l_2_z'],
-                                   df['Neutrino_1.E'], df['Neutrino_1.x'], df['Neutrino_1.y'], df['Neutrino_1.z'])
-                B_mass1
-
-                df['Delta2'] = np.abs(B_mass1 - W_mass) + np.abs(B_mass2 - W_mass)
-
-                condition = df["Delta1"] < df["Delta2"]
-
-                df["p_v_1_E"] = df["Neutrino_1.E"].where(condition, df["Neutrino_2.E"])
-                df["p_v_1_x"] = df["Neutrino_1.x"].where(condition, df["Neutrino_2.x"])
-                df["p_v_1_y"] = df["Neutrino_1.y"].where(condition, df["Neutrino_2.y"])
-                df["p_v_1_z"] = df["Neutrino_1.z"].where(condition, df["Neutrino_2.z"])
-                df["p_v_2_E"] = df["Neutrino_2.E"].where(condition, df["Neutrino_1.E"])
-                df["p_v_2_x"] = df["Neutrino_2.x"].where(condition, df["Neutrino_1.x"])
-                df["p_v_2_y"] = df["Neutrino_2.y"].where(condition, df["Neutrino_1.y"])
-                df["p_v_2_z"] = df["Neutrino_2.z"].where(condition, df["Neutrino_1.z"])
-
-                df = df.drop(columns=['Neutrino_1.E', 'Neutrino_1.x', 'Neutrino_1.y', 'Neutrino_1.z', 'Neutrino_2.E', 'Neutrino_2.x', 'Neutrino_2.y', 'Neutrino_2.z', 'Delta1', 'Delta2'])
-            else:
-                df["p_v_1_E"] = df["Neutrino_1.E"]
-                df["p_v_1_x"] = df["Neutrino_1.x"]
-                df["p_v_1_y"] = df["Neutrino_1.y"]
-                df["p_v_1_z"] = df["Neutrino_1.z"]
-                df["p_v_2_E"] = df["Neutrino_2.E"]
-                df["p_v_2_x"] = df["Neutrino_2.x"]
-                df["p_v_2_y"] = df["Neutrino_2.y"]
-                df["p_v_2_z"] = df["Neutrino_2.z"]
-
-                df = df.drop(columns=['Neutrino_1.E', 'Neutrino_1.x', 'Neutrino_1.y', 'Neutrino_1.z', 'Neutrino_2.E', 'Neutrino_2.x', 'Neutrino_2.y', 'Neutrino_2.z'])
-
-            df.to_csv(self.data_path, index=False)
+            df.to_csv(self.data_path + '.csv', index=False)
 
     def load_data(self):
-        # raw_data_path = self.data_path
-        self.data = pd.read_csv(self.data_path)
+        self.data = pd.read_csv(self.data_path + '.csv')
         # Only take first 50000 rows
         # self.data = self.data.head(50000)
 
     def process_features(self):
+        # ML dataset
         lep0 = self.data[['p_l_1_E', 'p_l_1_x', 'p_l_1_y', 'p_l_1_z']]
         lep1 = self.data[['p_l_2_E', 'p_l_2_x', 'p_l_2_y', 'p_l_2_z']]
 
@@ -194,28 +102,54 @@ class DataPreprocessor:
 
         self.X = pd.concat([lep0, lep1, mpx, mpy], axis=1)
 
+        if self.drop_zeroes:
+            # Check detector_sim columns for any zeroes in either of leptons and drop them
+            zero_columns = ['p_l_1_E', 'p_l_1_x', 'p_l_1_y', 'p_l_1_z', 'p_l_2_E', 'p_l_2_x', 'p_l_2_y', 'mpx', 'mpy']
+            self.X = self.X[~(self.X[zero_columns] == 0).any(axis=1)]
+
         self.types = self.data['Event.Type'].copy()
 
+        # Detector simulation
+        self.detector_sim = self.data[['p_l_1_E', 'p_l_1_x', 'p_l_1_y', 'p_l_1_z',
+                                       'p_l_2_E', 'p_l_2_x', 'p_l_2_y', 'p_l_2_z',
+                                       'mpx', 'mpy', 'Event.Type']].copy()
+
+        # Truth
+        self.truth = self.data[['p_l_1_E_truth', 'p_l_1_x_truth', 'p_l_1_y_truth', 'p_l_1_z_truth',
+                                'p_l_2_E_truth', 'p_l_2_x_truth', 'p_l_2_y_truth', 'p_l_2_z_truth',
+                                'p_v_1_E_truth', 'p_v_1_x_truth', 'p_v_1_y_truth', 'p_v_1_z_truth',
+                                'p_v_2_E_truth', 'p_v_2_x_truth', 'p_v_2_y_truth', 'p_v_2_z_truth', 'Event.Type']].copy()
+
     def process_targets(self):
-        y1 = self.data[['p_v_1_E', 'p_v_1_x', 'p_v_1_y', 'p_v_1_z']]
-        y2 = self.data[['p_v_2_E', 'p_v_2_x', 'p_v_2_y', 'p_v_2_z']]
+        y1 = self.data[['p_v_1_E_truth', 'p_v_1_x_truth', 'p_v_1_y_truth', 'p_v_1_z_truth']]
+        y2 = self.data[['p_v_2_E_truth', 'p_v_2_x_truth', 'p_v_2_y_truth', 'p_v_2_z_truth']]
 
         self.y = pd.concat([y1, y2], axis=1)
+
+        if self.drop_zeroes:
+            # Use the indices of the rows that were not dropped in X
+            self.y = self.y.loc[self.X.index]
+
 
     def scale_data(self):
         self.X /= 1e3
         self.y /= 1e3
 
     def save_data(self):
-        features_path = self.config['data']['processed_features_path']
-        targets_path = self.config['data']['processed_targets_path']
-        self.X.to_csv(features_path, index=False)
-        self.y.to_csv(targets_path, index=False)
+        datasets = (self.X, self.y, self.detector_sim, self.truth)
+        paths = (self.processed_features_path, self.processed_targets_path, self.detector_sim_path, self.truth_path)
+
+        for dataset, path in zip(datasets, paths):
+            if path:
+                if self.cuts:
+                    path = path + '_cuts'
+
+                dataset.to_csv(path + '.csv', index=False)
 
     def create_split(self, return_numpy=True):
         X_train, X_temp, y_train, y_temp = train_test_split(self.X, self.y, test_size=0.2, random_state=42)
         X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
-        print("Here!")
+
         if return_numpy:
             return X_train.to_numpy(), X_val.to_numpy(), X_test.to_numpy(), y_train.to_numpy(), y_val.to_numpy(), y_test.to_numpy()
         else:
@@ -231,6 +165,7 @@ class DataPreprocessor:
         return np.abs(1/2 * np.log((p + pz)/(p - pz)))
 
     def apply_selection_cuts(self, use_event_type=False):
+        # ML dataset
         self.X = self.X.assign(lep0_pT = self.p_T(self.X['p_l_1_x'], self.X['p_l_1_y']))
         self.X = self.X.assign(lep1_pT = self.p_T(self.X['p_l_2_x'], self.X['p_l_2_y']))
         self.X = self.X.assign(lep0_p = self.p(self.X['p_l_1_x'], self.X['p_l_1_y'], self.X['p_l_1_z']))
@@ -258,16 +193,71 @@ class DataPreprocessor:
 
         self.X = self.X.drop(columns=['lep0_pT', 'lep1_pT', 'lep0_p', 'lep1_p', 'lep0_eta', 'lep1_eta'])
 
-    def run_preprocessing(self,return_numpy=True) -> tuple:
+        # Detector simulation
+        self.detector_sim = self.detector_sim.assign(lep0_pT = self.p_T(self.detector_sim['p_l_1_x'], self.detector_sim['p_l_1_y']))
+        self.detector_sim = self.detector_sim.assign(lep1_pT = self.p_T(self.detector_sim['p_l_2_x'], self.detector_sim['p_l_2_y']))
+        self.detector_sim = self.detector_sim.assign(lep0_p = self.p(self.detector_sim['p_l_1_x'], self.detector_sim['p_l_1_y'], self.detector_sim['p_l_1_z']))
+        self.detector_sim = self.detector_sim.assign(lep1_p = self.p(self.detector_sim['p_l_2_x'], self.detector_sim['p_l_2_y'], self.detector_sim['p_l_2_z']))
+        self.detector_sim = self.detector_sim.assign(lep0_eta = self.eta(self.detector_sim['lep0_p'], self.detector_sim['p_l_1_z']))
+        self.detector_sim = self.detector_sim.assign(lep1_eta = self.eta(self.detector_sim['lep1_p'], self.detector_sim['p_l_2_z']))
+
+        # Either use Event.Type to differentiate between electron and muon
+        if use_event_type:
+            # Common cut
+            mask = (self.detector_sim.lep0_pT > 22.0) & (self.detector_sim.lep1_pT > 10.0)
+
+            # Conditional cuts based on Event.Type
+            type1_mask = (self.detector_sim['Event.Type'] == 0) & (self.detector_sim.lep0_eta < 2.47) & (self.detector_sim.lep1_eta < 2.5)
+            type2_mask = (self.detector_sim['Event.Type'] == 1) & (self.detector_sim.lep0_eta < 2.5) & (self.detector_sim.lep1_eta < 2.47)
+
+            full_mask = mask & (type1_mask | type2_mask)
+
+            self.detector_sim = self.detector_sim[full_mask].copy()
+        # Or do not and use 2.5
+        else:
+            self.detector_sim = self.detector_sim[(self.detector_sim.lep0_pT > 22.0) & (self.detector_sim.lep1_pT > 10.0) & (self.detector_sim.lep0_eta < 2.5) & (self.detector_sim.lep1_eta < 2.5)]
+
+        self.detector_sim = self.detector_sim.drop(columns=['lep0_pT', 'lep1_pT', 'lep0_p', 'lep1_p', 'lep0_eta', 'lep1_eta'])
+
+        # Truth
+        self.truth = self.truth.assign(lep0_pT = self.p_T(self.truth['p_l_1_x_truth'], self.truth['p_l_1_y_truth']))
+        self.truth = self.truth.assign(lep1_pT = self.p_T(self.truth['p_l_2_x_truth'], self.truth['p_l_2_y_truth']))
+        self.truth = self.truth.assign(lep0_p = self.p(self.truth['p_l_1_x_truth'], self.truth['p_l_1_y_truth'], self.truth['p_l_1_z_truth']))
+        self.truth = self.truth.assign(lep1_p = self.p(self.truth['p_l_2_x_truth'], self.truth['p_l_2_y_truth'], self.truth['p_l_2_z_truth']))
+        self.truth = self.truth.assign(lep0_eta = self.eta(self.truth['lep0_p'], self.truth['p_l_1_z_truth']))
+        self.truth = self.truth.assign(lep1_eta = self.eta(self.truth['lep1_p'], self.truth['p_l_2_z_truth']))
+
+        # Either use Event.Type to differentiate between electron and muon
+        if use_event_type:
+            # Common cut
+            mask = (self.truth.lep0_pT > 22.0) & (self.truth.lep1_pT > 10.0)
+
+            # Conditional cuts based on Event.Type
+            type1_mask = (self.truth['Event.Type'] == 0) & (self.truth.lep0_eta < 2.47) & (self.truth.lep1_eta < 2.5)
+            type2_mask = (self.truth['Event.Type'] == 1) & (self.truth.lep0_eta < 2.5) & (self.truth.lep1_eta < 2.47)
+
+            full_mask = mask & (type1_mask | type2_mask)
+
+            self.truth = self.truth[full_mask].copy()
+        # Or do not and use 2.5
+        else:
+            self.truth = self.truth[(self.truth.lep0_pT > 22.0) & (self.truth.lep1_pT > 10.0) & (self.truth.lep0_eta < 2.5) & (self.truth.lep1_eta < 2.5)]
+
+        self.truth = self.truth.drop(columns=['lep0_pT', 'lep1_pT', 'lep0_p', 'lep1_p', 'lep0_eta', 'lep1_eta'])
+
+
+    def run_preprocessing(self, return_numpy=True) -> tuple:
         self.extract_data()
         self.load_data()
         self.process_features()
         self.process_targets()
+
         #self.scale_data()
         if self.cuts:
             self.apply_selection_cuts()
-        if self.processed_features_path and self.processed_targets_path:
-            self.save_data()
+
+        self.save_data()
+
         if self.splits:
             X_train, X_val, X_test, y_train, y_val, y_test = self.create_split(return_numpy)
             return X_train, X_val, X_test, y_train, y_val, y_test, self.types
