@@ -164,7 +164,7 @@ class DataPreprocessor:
     def eta(self, p, pz):
         return np.abs(1/2 * np.log((p + pz)/(p - pz)))
 
-    def apply_selection_cuts(self, use_event_type=False):
+    def apply_selection_cuts(self, use_event_type=True):
         # ML dataset
         self.X = self.X.assign(lep0_pT = self.p_T(self.X['p_l_1_x'], self.X['p_l_1_y']))
         self.X = self.X.assign(lep1_pT = self.p_T(self.X['p_l_2_x'], self.X['p_l_2_y']))
@@ -179,8 +179,8 @@ class DataPreprocessor:
             mask = (self.X.lep0_pT > 22.0) & (self.X.lep1_pT > 10.0)
 
             # Conditional cuts based on Event.Type
-            type1_mask = (self.X['Event.Type'] == 1) & (self.X.lep0_eta < 2.47) & (self.X.lep1_eta < 2.5)
-            type2_mask = (self.X['Event.Type'] == 2) & (self.X.lep0_eta < 2.5) & (self.X.lep1_eta < 2.47)
+            type1_mask = (self.X['Event.Type'] == 0) & (self.X.lep0_eta < 2.47) & (self.X.lep1_eta < 2.5)
+            type2_mask = (self.X['Event.Type'] == 1) & (self.X.lep0_eta < 2.5) & (self.X.lep1_eta < 2.47)
 
             full_mask = mask & (type1_mask | type2_mask)
 
