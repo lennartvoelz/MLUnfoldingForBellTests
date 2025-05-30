@@ -8,16 +8,22 @@ import numpy as np
 
 config = yaml.safe_load(open('config.yaml'))
 
-data = DataPreprocessor(data_path=config['data_path'], cuts=True, splits=False)
+data = DataPreprocessor(data_path=config['data_path'], raw_data_path=config['raw_data_path'], cuts=False, splits=False, drop_zeroes=True)
 
-X, y = data.run_preprocessing()
+X, y, types = data.run_preprocessing()
 
-lep0 = X[:100000,:4]
-lep1 = X[:100000,4:8]
-mpx = X[:100000,8]
-mpy = X[:100000,9]
+# lep0 = X[:100000,:4]
+# lep1 = X[:100000,4:8]
+# mpx = X[:100000,8]
+# mpy = X[:100000,9]
 
-y = y[:100000]
+# y = y[:100000]
+
+lep0 = X[:,:4]
+lep1 = X[:,4:8]
+mpx = X[:,8]
+mpy = X[:,9]
+
 
 nu_1 = np.zeros((len(lep0), 4))
 nu_2 = np.zeros((len(lep0), 4))
@@ -41,5 +47,5 @@ mae = results(y, y_pred)
 
 print(mae.run("reports/analytic_ww_cuts/"))
 
-results_analytic = calculate_results([final_state, final_state_truth], ["Analytic Reconstruction", "Truth"], "Analytic Reconstruction WW + Cuts")
-results_analytic.run("reports/analytic_ww_cuts_truth/")
+results_analytic = calculate_results([final_state, final_state_truth], ["Analytic Reconstruction", "Truth"], "Analytic Reconstruction Detector Simulation", types)
+results_analytic.run("reports/analytic/")

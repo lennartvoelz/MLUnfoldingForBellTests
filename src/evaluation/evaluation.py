@@ -10,20 +10,22 @@ from scipy import stats
 from matplotlib.colors import LogNorm
 
 
-class calculate_results:
-    def __init__(self, arrays, labels, title):
+class calculate_results():
+    def __init__(self, arrays, labels, title, types=None):
         self.reconstructions = {label: array for label, array in zip(labels, arrays)}
         self.title = title
+        self.types = types
+
 
     def calculate_gellmann_coefficients(self, array):
         """
         Calculates the Gell-Mann coefficients for each event in the reconstruction array
         """
         num_samples = len(array)
-        lep1 = array[:, :4]
-        lep2 = array[:, 4:8]
-        neutrino1 = array[:, 8:12]
-        neutrino2 = array[:, 12:]
+        lep1 = array[:,:4]
+        lep2 = array[:,4:8]
+        neutrino1 = array[:,8:12]
+        neutrino2 = array[:,12:]
 
         # Convert to LorentzVector objects
         lep1 = [LorentzVector(lep1[i], type="four-vector") for i in range(num_samples)]
@@ -42,8 +44,22 @@ class calculate_results:
         angles_ = np.zeros((num_samples, 4))
 
         for i in range(num_samples):
-            I_3_obj = I_3(lep1[i], lep2[i], neutrino1[i], neutrino2[i])
-            pW1_event, pW2_event, cov_event, cov_sym_event, angles = I_3_obj.analysis()
+            if self.types is None:
+                I_3_obj = I_3(
+                    lep1[i],
+                    lep2[i],
+                    neutrino1[i],
+                    neutrino2[i]
+                )
+            else:
+                I_3_obj = I_3(
+                    lep1[i],
+                    lep2[i],
+                    neutrino1[i],
+                    neutrino2[i],
+                    self.types.iloc[i]
+                )
+            pW1_event, pW2_event, cov_event, cov_sym_event = I_3_obj.analysis()
             pW1[i] = pW1_event
             pW2[i] = pW2_event
             cov[i] = cov_event
@@ -78,6 +94,7 @@ class calculate_results:
             self.angles_.append(angles)
             self.labels.append(label)
             self.colors.append(color_map(idx))
+
 
     def plot_gellmann_coefficients(self, target_path):
         """

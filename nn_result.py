@@ -1,12 +1,34 @@
+import numpy as np
+import yaml
+import tensorflow as tf
 from src.evaluation.evaluation import calculate_results
 from src.evaluation.calculate_mae import results
-import numpy as np
+from src.data_preproc.preprocessing import DataPreprocessor
 
-final_state = np.loadtxt("/mnt/c/Users/Lennart/Desktop/Studium/MLUnfoldingForBellTests/data/dnn_final_state_ww.csv")
-final_state_truth = np.loadtxt("/mnt/c/Users/Lennart/Desktop/Studium/MLUnfoldingForBellTests/data/dnn_final_state_ww_truth.csv")
+# final_state = np.loadtxt("/mnt/c/Users/Lennart/Desktop/Studium/MLUnfoldingForBellTests/data/dnn_detector_sim_final_state.csv")
+# final_state_truth = np.loadtxt("/mnt/c/Users/Lennart/Desktop/Studium/MLUnfoldingForBellTests/data/dnn_detector_sim_final_state_truth.csv")
 
-results_nn = calculate_results([final_state, final_state_truth], ["NN Regression", "Truth"], "DNN WW No Cuts")
-results_nn.run("reports/nn_ww/")
+# config = yaml.safe_load(open('config.yaml'))
+with open('config.yaml', 'r') as file:
+    config = yaml.safe_load(file)
 
-# results_nn_mae = results(final_state_truth[:,8:], final_state[:,8:])
-# results_nn_mae.run("reports/nn_cuts_ww/")
+data = DataPreprocessor(data_path=config['data_path'], raw_data_path=config['raw_data_path'], cuts=False, splits=True, drop_zeroes=True)
+
+X_train, X_val, X_test, y_train, y_val, y_test, types = data.run_preprocessing()
+
+# Load DNN with cuts
+dense_net = tf.keras.models.load_model('models\dnn_detector_sim.keras')
+
+# Show the model architecture
+dense_net.summary()
+
+# Evaluate DNN with cuts
+y_pred = dense_net.predict(X_test)
+final_state = np.concatenate((X_test[:,:8], y_pred), axis=1)
+final_state_truth = np.concatenate((X_test[:,:8], y_test), axis=1)
+
+results_nn = calculate_results([final_state, final_state_truth], ["NN Regression", "Truth"], "NN Reconstruction Detector Simulation", types)
+results_nn.run("reports/nn_detector/")
+
+results_nn_mae = results(final_state_truth[:,8:], final_state[:,8:])
+results_nn_mae.run("reports/nn_detector/")

@@ -1,4 +1,9 @@
-data_path: /mnt/c/Users/Lennart/Desktop/Studium/MLUnfoldingForBellTests/data/df_final.csv
+data_path: data\hww_1M_MG5_final
+raw_data_path: data\hww_1M_MG5
+processed_features_path: data\hww_1M_MG5_final_X
+processed_targets_path: data\hww_1M_MG5_final_y
+detector_sim_path: data\hww_1M_MG5_final_detector_sim
+truth_path: data\hww_1M_MG5_final_truth
 
 input_shape: 10
 num_dense_layers: 8
