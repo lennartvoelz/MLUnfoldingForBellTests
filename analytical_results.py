@@ -12,13 +12,6 @@ data = DataPreprocessor(data_path=config['data_path'], raw_data_path=config['raw
 
 X, y, types = data.run_preprocessing()
 
-# lep0 = X[:100000,:4]
-# lep1 = X[:100000,4:8]
-# mpx = X[:100000,8]
-# mpy = X[:100000,9]
-
-# y = y[:100000]
-
 lep0 = X[:,:4]
 lep1 = X[:,4:8]
 mpx = X[:,8]

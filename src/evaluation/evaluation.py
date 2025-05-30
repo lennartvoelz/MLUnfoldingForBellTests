@@ -59,7 +59,7 @@ class calculate_results():
                     neutrino2[i],
                     self.types.iloc[i]
                 )
-            pW1_event, pW2_event, cov_event, cov_sym_event = I_3_obj.analysis()
+            pW1_event, pW2_event, cov_event, cov_sym_event, angles = I_3_obj.analysis()
             pW1[i] = pW1_event
             pW2[i] = pW2_event
             cov[i] = cov_event
