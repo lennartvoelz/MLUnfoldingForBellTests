@@ -100,7 +100,10 @@ class DataPreprocessor:
             mpx = self.data[['mpx']]
             mpy = self.data[['mpy']]
 
+        
+
         self.X = pd.concat([lep0, lep1, mpx, mpy], axis=1)
+        self.X["Event.Type"] = self.data["Event.Type"].copy()
 
         if self.drop_zeroes:
             # Check detector_sim columns for any zeroes in either of leptons and drop them
@@ -179,6 +182,7 @@ class DataPreprocessor:
             mask = (self.X.lep0_pT > 22.0) & (self.X.lep1_pT > 10.0)
 
             # Conditional cuts based on Event.Type
+            print(self.X.columns)
             type1_mask = (self.X['Event.Type'] == 0) & (self.X.lep0_eta < 2.47) & (self.X.lep1_eta < 2.5)
             type2_mask = (self.X['Event.Type'] == 1) & (self.X.lep0_eta < 2.5) & (self.X.lep1_eta < 2.47)
 

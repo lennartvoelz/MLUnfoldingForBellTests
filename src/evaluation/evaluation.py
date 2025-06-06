@@ -8,24 +8,26 @@ from datetime import datetime
 import os
 from scipy import stats
 from matplotlib.colors import LogNorm
+import pandas as pd
 
 
-class calculate_results():
-    def __init__(self, arrays, labels, title, types=None):
-        self.reconstructions = {label: array for label, array in zip(labels, arrays)}
+class calculate_results:
+    def __init__(self, arrays, labels, title, types):
+        self.reconstructions = {
+            label: (array, t) for label, array, t in zip(labels, arrays, types)
+        }
+        print(self.reconstructions.keys())
         self.title = title
-        self.types = types
 
-
-    def calculate_gellmann_coefficients(self, array):
+    def calculate_gellmann_coefficients(self, array, type):
         """
         Calculates the Gell-Mann coefficients for each event in the reconstruction array
         """
         num_samples = len(array)
-        lep1 = array[:,:4]
-        lep2 = array[:,4:8]
-        neutrino1 = array[:,8:12]
-        neutrino2 = array[:,12:]
+        lep1 = array[:, :4]
+        lep2 = array[:, 4:8]
+        neutrino1 = array[:, 8:12]
+        neutrino2 = array[:, 12:]
 
         # Convert to LorentzVector objects
         lep1 = [LorentzVector(lep1[i], type="four-vector") for i in range(num_samples)]
@@ -44,20 +46,11 @@ class calculate_results():
         angles_ = np.zeros((num_samples, 4))
 
         for i in range(num_samples):
-            if self.types is None:
-                I_3_obj = I_3(
-                    lep1[i],
-                    lep2[i],
-                    neutrino1[i],
-                    neutrino2[i]
-                )
+            if type is None:
+                I_3_obj = I_3(lep1[i], lep2[i], neutrino1[i], neutrino2[i])
             else:
                 I_3_obj = I_3(
-                    lep1[i],
-                    lep2[i],
-                    neutrino1[i],
-                    neutrino2[i],
-                    self.types.iloc[i]
+                    lep1[i], lep2[i], neutrino1[i], neutrino2[i], type.iloc[i]
                 )
             pW1_event, pW2_event, cov_event, cov_sym_event, angles = I_3_obj.analysis()
             pW1[i] = pW1_event
@@ -84,9 +77,9 @@ class calculate_results():
 
         color_map = plt.get_cmap("Set1")
 
-        for idx, (label, array) in enumerate(self.reconstructions.items()):
+        for idx, (label, (array, t)) in enumerate(self.reconstructions.items()):
             pW1_num, pW2_num, cov_2d, cov_sym_2d, angles = (
-                self.calculate_gellmann_coefficients(array)
+                self.calculate_gellmann_coefficients(array, t)
             )
             self.datasets.append(cov_2d)
             self.pW1.append(pW1_num)
@@ -95,6 +88,49 @@ class calculate_results():
             self.labels.append(label)
             self.colors.append(color_map(idx))
 
+            # Concatenate array, type, pw1, pw2 and write to a csv file for each loop iteration
+            data = np.concatenate(
+                (array, t.values.reshape(-1, 1), pW1_num, pW2_num), axis=1
+            )
+            df = pd.DataFrame(
+                data,
+                columns=[
+                    "p_l_1_E_truth",
+                    "p_l_1_x_truth",
+                    "p_l_1_y_truth",
+                    "p_l_1_z_truth",
+                    "p_l_2_E_truth",
+                    "p_l_2_x_truth",
+                    "p_l_2_y_truth",
+                    "p_l_2_z_truth",
+                    "p_v_1_E_truth",
+                    "p_v_1_x_truth",
+                    "p_v_1_y_truth",
+                    "p_v_1_z_truth",
+                    "p_v_2_E_truth",
+                    "p_v_2_x_truth",
+                    "p_v_2_y_truth",
+                    "p_v_2_z_truth",
+                    "type",
+                    "pWFirst1",
+                    "pWFirst2",
+                    "pWFirst3",
+                    "pWFirst4",
+                    "pWFirst5",
+                    "pWFirst6",
+                    "pWFirst7",
+                    "pWFirst8",
+                    "pWSecond1",
+                    "pWSecond2",
+                    "pWSecond3",
+                    "pWSecond4",
+                    "pWSecond5",
+                    "pWSecond6",
+                    "pWSecond7",
+                    "pWSecond8",
+                ],
+            )
+            df.to_csv(f"{label}_data.csv", index=False)
 
     def plot_gellmann_coefficients(self, target_path):
         """
@@ -105,33 +141,16 @@ class calculate_results():
 
         for cov_2d, label in zip(self.datasets, self.labels):
             cov_mean = cov_2d.mean(axis=0) / 4
-            # Instead of taking the mean, take a trimmed mean to reduce the influence of outliers
-            # cov_mean = trim_mean(cov_2d, 0.15, axis=0)/4
-            # Instead of the mean, take the mode
-            # cov_mean = np.zeros((8, 8))
-            # for i in range(8):
-            #     for j in range(8):
-            #         # Bin each coefficient in 50 bins
-            #         hist, bins = np.histogram(cov_2d[:, i, j], bins=50)
-            #         # Find the bin with the highest frequency
-            #         mode_idx = np.argmax(hist)
-            #         # Take the middle of the bin as the mode
-            #         mode_value = (bins[mode_idx] + bins[mode_idx + 1]) / 2
-            #         cov_mean[i, j] = mode_value
 
             vmin = cov_mean.min()
             vmax = cov_mean.max()
-            # vmin = -1.25
-            # vmax = 1.25
+
             norm = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
 
             plt.figure(figsize=(8, 6))
             plt.imshow(cov_mean, cmap="seismic", norm=norm, interpolation="nearest")
             plt.colorbar()
-            # # Write the value in each bin of the 2D histogram
-            # for i in range(cov_mean.shape[0]):
-            #     for j in range(cov_mean.shape[1]):
-            #         plt.text(j, i, f"{cov_mean[i, j]:.2f}", ha='center', va='center', color='black')
+
             plt.title(f"Coefficients $c_{{ij}}$ - {self.title}", fontsize=16)
             plt.xlabel(r"$W^+$ Index $j$", fontsize=14)
             plt.ylabel(r"$W^-$ Index $i$", fontsize=14)
@@ -376,15 +395,17 @@ class calculate_results():
     def run(self, target_path):
         self.initialize_datasets()
         self.plot_gellmann_coefficients(target_path)
-        self.plot_gellmann_coefficients_hist(target_path)
-        self.plot_wigner_heatmap(target_path)
+        # self.plot_gellmann_coefficients_hist(target_path)
+        # self.plot_wigner_heatmap(target_path)
         # self.plot_wigner_heatmap_diff(target_path)
 
 
 class calculate_results_diff_analysis(calculate_results):
-    def __init__(self, arrays, labels, title):
-        super().__init__(arrays, labels, title)
-        self.reconstructions = {label: array for label, array in zip(labels, arrays)}
+    def __init__(self, arrays, labels, title, types):
+        super().__init__(arrays, labels, title, types)
+        self.reconstructions = {
+            label: (array, t) for label, array, t in zip(labels, arrays, types)
+        }
         self.title = title
 
     def plot_wigner_efficiency_heatmap(self, target_path: str, bins: int = 50):
@@ -467,6 +488,9 @@ class calculate_results_diff_analysis(calculate_results):
             self.angles_[1][:, 3], self.angles_[1][:, 1], bins=[cos_edges, phi_edges]
         )
 
+        print("Minimum count after cuts for W-:", H_Wminus_cuts.min())
+        print("Minimum count after cuts for W+:", H_Wplus_cuts.min())
+
         fig, axs = plt.subplots(2, 2, figsize=(20, 20))
         fig.suptitle(f"{self.title}", fontsize=30)
         axs[0, 0].imshow(
@@ -511,29 +535,69 @@ class calculate_results_diff_analysis(calculate_results):
             ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
             ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
             ax.ticklabel_format(style="sci", axis="both", scilimits=(0, 0))
+        plt.colorbar(axs[0, 0].images[0], ax=axs[:, 0], orientation="vertical", fraction=0.02, pad=0.04)
+        plt.colorbar(axs[0, 1].images[0], ax=axs[:, 1], orientation="vertical", fraction=0.02, pad=0.04)
+        plt.colorbar(axs[1, 0].images[0], ax=axs[:, 0], orientation="vertical", fraction=0.02, pad=0.04)
+        plt.colorbar(axs[1, 1].images[0], ax=axs[:, 1], orientation="vertical", fraction=0.02, pad=0.04)
         plt.tight_layout(rect=[0.02, 0.02, 0.98, 0.95])
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         fname = f"2d_angle_hist_{stamp}.png".replace(" ", "_")
         plt.savefig(os.path.join(target_path, fname), dpi=150)
         plt.close(fig)
 
+        # Mirror the histograms for W+ with cuts and subtract from W- with cuts
+        H_Wplus_mirror = np.flipud(H_Wplus_cuts)
+        H_diff = H_Wminus_cuts - H_Wplus_mirror
+        fig, ax = plt.subplots(figsize=(10, 10))
+        fig.suptitle(f"{self.title} - W- minus mirrored W+", fontsize=30)
+        im = ax.imshow(
+            H_diff.T,
+            origin="lower",
+            aspect="auto",
+            extent=[phi_edges[0], phi_edges[-1], cos_edges[0], cos_edges[-1]],
+            cmap="coolwarm",
+            interpolation="nearest",
+        )
+        cbar = fig.colorbar(im, ax=ax)
+        cbar.set_label("Difference", fontsize=20)
+        ax.set_xlabel(r"$\phi$", fontsize=20)
+        ax.set_ylabel(r"$\cos(\theta)$", fontsize=20)
+        ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+        ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+        ax.ticklabel_format(style="sci", axis="both", scilimits=(0, 0))
+        plt.tight_layout(rect=[0.02, 0.02, 0.98, 0.95])
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fname = f"2d_angle_hist_diff_{stamp}.png".replace(" ", "_")
+        plt.savefig(os.path.join(target_path, fname), dpi=150)
+        plt.close(fig)
+
     def wignerP(self, k, sign, sample):
-        cos_theta = self.angles_[sample][:, 2] if sign == -1 else self.angles_[sample][:, 3]
-        phi       = self.angles_[sample][:, 0] if sign == -1 else self.angles_[sample][:, 1]
+        cos_theta = (
+            self.angles_[sample][:, 2] if sign == -1 else self.angles_[sample][:, 3]
+        )
+        phi = self.angles_[sample][:, 0] if sign == -1 else self.angles_[sample][:, 1]
 
         theta = np.arccos(cos_theta)
         s, c = np.sin(theta), np.cos(theta)
 
-        if k == 1:  return np.sqrt(2)*(5*c + sign)*s*np.cos(phi)
-        if k == 2:  return np.sqrt(2)*(5*c + sign)*s*np.sin(phi)
-        if k == 3:  return 0.25*(sign*4*c + 15*np.cos(2*theta) + 5)
-        if k == 4:  return 5*s**2*np.cos(2*phi)
-        if k == 5:  return 5*s**2*np.sin(2*phi)
-        if k == 6:  return np.sqrt(2)*(sign - 5*c)*s*np.cos(phi)
-        if k == 7:  return np.sqrt(2)*(sign - 5*c)*s*np.sin(phi)
-        if k == 8:  return (1/(4*np.sqrt(3)))*(sign*12*c - 15*np.cos(2*theta) - 5)
+        if k == 1:
+            return np.sqrt(2) * (5 * c + sign) * s * np.cos(phi)
+        if k == 2:
+            return np.sqrt(2) * (5 * c + sign) * s * np.sin(phi)
+        if k == 3:
+            return 0.25 * (sign * 4 * c + 15 * np.cos(2 * theta) + 5)
+        if k == 4:
+            return 5 * s**2 * np.cos(2 * phi)
+        if k == 5:
+            return 5 * s**2 * np.sin(2 * phi)
+        if k == 6:
+            return np.sqrt(2) * (sign - 5 * c) * s * np.cos(phi)
+        if k == 7:
+            return np.sqrt(2) * (sign - 5 * c) * s * np.sin(phi)
+        if k == 8:
+            return (1 / (4 * np.sqrt(3))) * (sign * 12 * c - 15 * np.cos(2 * theta) - 5)
         raise ValueError
-    
+
     def plot_wignerP_1d_hist(self, target_path, bins=50):
         os.makedirs(target_path, exist_ok=True)
 
@@ -542,24 +606,26 @@ class calculate_results_diff_analysis(calculate_results):
             fig.suptitle(f"{self.title}: Φ$_{{{k}}}$", fontsize=18)
 
             for sample, lbl, col, sign in (
-                (0, "truth  W⁻", 'tab:blue',  -1),
-                (1, "selected W⁻", 'tab:cyan', -1),
-                (0, "truth  W⁺", 'tab:red',   +1),
-                (1, "selected W⁺", 'tab:orange', +1),
+                (0, "truth  W⁻", "tab:blue", -1),
+                (1, "selected W⁻", "tab:cyan", -1),
+                (0, "truth  W⁺", "tab:red", +1),
+                (1, "selected W⁺", "tab:orange", +1),
             ):
                 data = self.wignerP(k, sign, sample)
                 data = data[np.isfinite(data)]
                 hist, edges = np.histogram(data, bins=bins, density=True)
-                centres = 0.5*(edges[:-1] + edges[1:])
-                ax.step(centres, hist, where='mid', label=lbl, color=col)
+                centres = 0.5 * (edges[:-1] + edges[1:])
+                ax.step(centres, hist, where="mid", label=lbl, color=col)
 
-            ax.set_xlabel("Φ value");  ax.set_ylabel("normalised counts")
-            ax.legend(fontsize=8);  ax.grid(True, alpha=0.3)
+            ax.set_xlabel("Φ value")
+            ax.set_ylabel("normalised counts")
+            ax.legend(fontsize=8)
+            ax.grid(True, alpha=0.3)
 
             fname = f"wignerP_hist_k{k}_{datetime.now():%Y%m%d_%H%M%S}.png"
-            plt.tight_layout();  plt.savefig(os.path.join(target_path, fname), dpi=150)
+            plt.tight_layout()
+            plt.savefig(os.path.join(target_path, fname), dpi=150)
             plt.close(fig)
-
 
     def run(self, target_path):
         self.initialize_datasets()
