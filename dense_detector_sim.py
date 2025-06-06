@@ -12,9 +12,9 @@ from tensorflow.keras.callbacks import EarlyStopping
 
 config = yaml.safe_load(open('config.yaml'))
 
-data_preprocessor_detector_sim = DataPreprocessor(data_path=config["data_path"], cuts=False)
+data_preprocessor_detector_sim = DataPreprocessor(data_path=config["data_path"], raw_data_path=config['raw_data_path'], cuts=True)
 
-X_detector_sim_train, X_detector_sim_val, X_detector_sim_test, y_detector_sim_train, y_detector_sim_val, y_detector_sim_test = data_preprocessor_detector_sim.run_preprocessing()
+X_detector_sim_train, X_detector_sim_val, X_detector_sim_test, y_detector_sim_train, y_detector_sim_val, y_detector_sim_test, types = data_preprocessor_detector_sim.run_preprocessing()
 
 optimizer = Adam(learning_rate=config['learning_rate'])
 loss = LogCosh()
