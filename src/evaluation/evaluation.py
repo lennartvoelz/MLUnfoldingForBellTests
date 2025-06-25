@@ -473,39 +473,29 @@ class calculate_results_diff_analysis(calculate_results):
     def bell_inequality_batch(self, target_path, bins=50):
         os.makedirs(target_path, exist_ok=True)
 
-        # Create list to store all density matrices for batch processing
         density_matrices = []
 
-        for i in range(2):  # For each dataset (truth/reconstruction)
-            for j in range(len(self.pW1[i])):  # For each event
-                # Create 9x9 density matrix for this event
+        for i in range(2):
+            for j in range(len(self.pW1[i])):
                 mat = np.zeros((9, 9))
 
-                # Fill covariance terms (indices 1-8, 1-8)
                 for k in range(1, 9):
                     for m in range(1, 9):
                         mat[k, m] = self.datasets[i][j][k - 1, m - 1] / 4.0
 
-                # Fill pW1 terms (row 0, columns 1-8)
                 for k in range(1, 9):
                     mat[0, k] = self.pW2[i][j][k - 1] / 2.0
-
-                # Fill pW2 terms (column 0, rows 1-8)
-                for k in range(1, 9):
                     mat[k, 0] = self.pW1[i][j][k - 1] / 2.0
 
                 density_matrices.append(mat)
 
-        # Now pass the list of 2D matrices to the batch function
         bell_values = I_3.CGLMP_test_batch(density_matrices)
 
-        # Plot the bell values for both datasets
         fig, ax = plt.subplots(figsize=(6, 4))
         fig.suptitle(f"{self.title}: Bell Inequality", fontsize=18)
 
         dataset_bell_values = []
         for i, label in enumerate(self.labels):
-            # Extract bell values for this dataset
             bell_values_dataset = bell_values[
                 i * len(self.pW1[0]) : (i + 1) * len(self.pW1[0])
             ]
@@ -527,11 +517,9 @@ class calculate_results_diff_analysis(calculate_results):
         plt.savefig(os.path.join(target_path, fname), dpi=150)
         plt.close(fig)
 
-        # Print statistics for each dataset
         for i, (label, bell_vals) in enumerate(zip(self.labels, dataset_bell_values)):
             print(f"Mean Bell inequality for {label}: {np.mean(bell_vals):.6f}")
 
-            # Most probable value
             hist, bin_edges = np.histogram(bell_vals, bins=bins, density=True)
             most_probable_bin = np.argmax(hist)
             most_probable_value = 0.5 * (
@@ -551,37 +539,21 @@ class calculate_results_diff_analysis(calculate_results):
 
         averaged_bell_values = []
 
-        print(len(self.datasets[0]))
-        print(len(self.pW1[0]))
-        print(len(self.pW2[0]))
+        for i in range(len(self.labels)):
+            avg_cov = np.mean(self.datasets[i], axis=0)
+            avg_pW1 = np.mean(self.pW1[i], axis=0)
+            avg_pW2 = np.mean(self.pW2[i], axis=0)
 
-        print(len(self.datasets[1]))
-        print(len(self.pW1[1]))
-        print(len(self.pW2[1]))
-
-        for i in range(len(self.labels)):  # For each dataset (truth/reconstruction)
-            # Average over all events for this dataset
-            avg_cov = np.mean(self.datasets[i], axis=0)  # Average covariance matrix
-            avg_pW1 = np.mean(self.pW1[i], axis=0)  # Average pW1 coefficients
-            avg_pW2 = np.mean(self.pW2[i], axis=0)  # Average pW2 coefficients
-
-            # Create averaged 9x9 density matrix
             avg_mat = np.zeros((9, 9))
 
-            # Fill covariance terms (indices 1-8, 1-8)
             for k in range(1, 9):
                 for m in range(1, 9):
                     avg_mat[k, m] = avg_cov[k - 1, m - 1] / 4.0
 
-            # Fill pW1 terms (row 0, columns 1-8)
             for k in range(1, 9):
                 avg_mat[0, k] = avg_pW2[k - 1] / 2.0
-
-            # Fill pW2 terms (column 0, rows 1-8)
-            for k in range(1, 9):
                 avg_mat[k, 0] = avg_pW1[k - 1] / 2.0
 
-            # Calculate single Bell value for this averaged matrix
             bell_value = I_3.CGLMP_test(avg_mat)
             averaged_bell_values.append(bell_value)
 
