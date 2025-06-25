@@ -1,6 +1,7 @@
 import numpy as np
 from src.utils.lorentz_vector import LorentzVector
 
+
 class Baseline(LorentzVector):
     def __init__(self, lep0, lep1, mpx, mpy):
         """
@@ -59,16 +60,18 @@ class Baseline(LorentzVector):
         Returns:
             np.array or None: Solutions to the quadratic equation.
         """
-        #print(a, b, c)
+        # print(a, b, c)
         discriminant = b**2 - 4 * a * c
-        #print(discriminant)
+        # print(discriminant)
         if discriminant < 0:
             return None
         elif discriminant == 0:
             return np.array([-b / (2 * a)])
         else:
             sqrt_discriminant = np.sqrt(discriminant)
-            return np.array([(-b + sqrt_discriminant) / (2 * a),(-b - sqrt_discriminant) / (2 * a)])
+            return np.array(
+                [(-b + sqrt_discriminant) / (2 * a), (-b - sqrt_discriminant) / (2 * a)]
+            )
 
     def solve_for_p_vv_z(self, M_vv, M_H, M_ll, p_ll, E_ll, missing_px, missing_py):
         """
@@ -86,8 +89,14 @@ class Baseline(LorentzVector):
         Returns:
             np.array or None: Solutions to the quadratic equation.
         """
-        M_fixed_squared = (M_H**2 - M_ll**2 - M_vv**2 + 2 * p_ll[0] * missing_px + 2 * p_ll[1] * missing_py)
-        a = p_ll[2]**2 - E_ll**2
+        M_fixed_squared = (
+            M_H**2
+            - M_ll**2
+            - M_vv**2
+            + 2 * p_ll[0] * missing_px
+            + 2 * p_ll[1] * missing_py
+        )
+        a = p_ll[2] ** 2 - E_ll**2
         b = M_fixed_squared * p_ll[2]
         c = 0.25 * M_fixed_squared**2 - E_ll**2 * (M_vv**2 + self.mpt**2)
 
@@ -109,32 +118,40 @@ class Baseline(LorentzVector):
         M_ll = self.p4_ll.get_invariant_mass()
         missing_px, missing_py = self.mpx, self.mpy
 
-        solutions = self.solve_for_p_vv_z(M_vv, M_H, M_ll, p_ll, E_ll, missing_px, missing_py)
+        solutions = self.solve_for_p_vv_z(
+            M_vv, M_H, M_ll, p_ll, E_ll, missing_px, missing_py
+        )
 
         if solutions is None:
             M_vv = 0
-            solutions = self.solve_for_p_vv_z(M_vv, M_H, M_ll, p_ll, E_ll, missing_px, missing_py)
+            solutions = self.solve_for_p_vv_z(
+                M_vv, M_H, M_ll, p_ll, E_ll, missing_px, missing_py
+            )
 
         if solutions is None:
-            return (p_ll[2] * self.mpt) / np.sqrt(E_ll**2 - p_ll[2]**2)
+            return (p_ll[2] * self.mpt) / np.sqrt(E_ll**2 - p_ll[2] ** 2)
 
         p_vv_z_1, p_vv_z_2 = solutions
         E_vv_1 = self.di_neutrino_energy(M_vv, p_vv_z_1)
         E_vv_2 = self.di_neutrino_energy(M_vv, p_vv_z_2)
 
         # Calculate Higgs four-momenta for each solution
-        p4_H_1 = np.array([
-            E_ll + E_vv_1,
-            p_ll[0] + missing_px,
-            p_ll[1] + missing_py,
-            p_ll[2] + p_vv_z_1
-        ])
-        p4_H_2 = np.array([
-            E_ll + E_vv_2,
-            p_ll[0] + missing_px,
-            p_ll[1] + missing_py,
-            p_ll[2] + p_vv_z_2
-        ])
+        p4_H_1 = np.array(
+            [
+                E_ll + E_vv_1,
+                p_ll[0] + missing_px,
+                p_ll[1] + missing_py,
+                p_ll[2] + p_vv_z_1,
+            ]
+        )
+        p4_H_2 = np.array(
+            [
+                E_ll + E_vv_2,
+                p_ll[0] + missing_px,
+                p_ll[1] + missing_py,
+                p_ll[2] + p_vv_z_2,
+            ]
+        )
 
         # Choose solution with smallest |cos(ψ_ll)|
         beta_1 = p4_H_1[1:] / p4_H_1[0]
@@ -164,7 +181,9 @@ class Baseline(LorentzVector):
         z_axis_momentum = z_axis.get_momentum()
 
         # Calculate cosine of the angle between boosted_ll and z_axis
-        cos_theta = np.dot(boosted_ll_momentum, z_axis_momentum) / (np.linalg.norm(boosted_ll_momentum) * np.linalg.norm(z_axis_momentum))
+        cos_theta = np.dot(boosted_ll_momentum, z_axis_momentum) / (
+            np.linalg.norm(boosted_ll_momentum) * np.linalg.norm(z_axis_momentum)
+        )
 
         return cos_theta
 
@@ -179,25 +198,37 @@ class Baseline(LorentzVector):
         p_vv_y = self.mpy
         E_vv = self.di_neutrino_energy(M_vv, p_vv_z)
         p4_vv = LorentzVector([E_vv, p_vv_x, p_vv_y, p_vv_z])
-        
-        #approach 2
+
+        # approach 2
         p_miss = LorentzVector([self.mpt, self.mpx, self.mpy, 0])
-        #p_miss = p4_vv
-        dir_w1 = self.p4_lep0.get_momentum()/np.linalg.norm(self.p4_lep0.get_momentum()) + p_miss.get_momentum()/(np.linalg.norm(p_miss.get_momentum()) * 2)
-        p_abs_w1 = np.linalg.norm(self.p4_lep0.get_momentum() + p_miss.get_momentum()/2)
-        #p_abs_w1 = 35*10**3
+        # p_miss = p4_vv
+        dir_w1 = self.p4_lep0.get_momentum() / np.linalg.norm(
+            self.p4_lep0.get_momentum()
+        ) + p_miss.get_momentum() / (np.linalg.norm(p_miss.get_momentum()) * 2)
+        p_abs_w1 = np.linalg.norm(
+            self.p4_lep0.get_momentum() + p_miss.get_momentum() / 2
+        )
+        # p_abs_w1 = 35*10**3
 
         E_W1 = np.sqrt(70**2 + p_abs_w1**2)
-        W1 = LorentzVector([E_W1, p_abs_w1*dir_w1[0], p_abs_w1*dir_w1[1], p_abs_w1*dir_w1[2]])
+        W1 = LorentzVector(
+            [E_W1, p_abs_w1 * dir_w1[0], p_abs_w1 * dir_w1[1], p_abs_w1 * dir_w1[2]]
+        )
 
-        dir_w2 = self.p4_lep1.get_momentum()/np.linalg.norm(self.p4_lep1.get_momentum()) + p_miss.get_momentum()/(np.linalg.norm(p_miss.get_momentum()) * 2)
-        p_abs_w2 = np.linalg.norm(self.p4_lep1.get_momentum() + p_miss.get_momentum()/2)
-        #p_abs_w2 = 29*10**3
+        dir_w2 = self.p4_lep1.get_momentum() / np.linalg.norm(
+            self.p4_lep1.get_momentum()
+        ) + p_miss.get_momentum() / (np.linalg.norm(p_miss.get_momentum()) * 2)
+        p_abs_w2 = np.linalg.norm(
+            self.p4_lep1.get_momentum() + p_miss.get_momentum() / 2
+        )
+        # p_abs_w2 = 29*10**3
 
         E_W2 = np.sqrt(39**2 + p_abs_w2**2)
-        W2 = LorentzVector([E_W2, p_abs_w2*dir_w2[0], p_abs_w2*dir_w2[1], p_abs_w2*dir_w2[2]])
+        W2 = LorentzVector(
+            [E_W2, p_abs_w2 * dir_w2[0], p_abs_w2 * dir_w2[1], p_abs_w2 * dir_w2[2]]
+        )
 
-        p4_v_on = (p4_vv + self.p4_lep1 - self.p4_lep0 + W1 - W2)*0.5
+        p4_v_on = (p4_vv + self.p4_lep1 - self.p4_lep0 + W1 - W2) * 0.5
 
         p4_v_off = p4_vv - p4_v_on
 
@@ -206,32 +237,56 @@ class Baseline(LorentzVector):
     def calculate_neutrino_solutions(self):
         if self.p4_lep0.get_pt() > self.p4_lep1.get_pt():
             p4_lep_onshell = self.p4_lep0
-            #p4_lep_offshell = self.p4_lep1
+            # p4_lep_offshell = self.p4_lep1
             switched = False
         else:
             p4_lep_onshell = self.p4_lep1
-            #p4_lep_offshell = self.p4_lep0
+            # p4_lep_offshell = self.p4_lep0
             switched = True
 
         p_vv_z = self.reconstruct_p_vv_z()
         M_vv = 0
-        p_vv = LorentzVector([self.di_neutrino_energy(M_vv, p_vv_z), self.mpx, self.mpy, p_vv_z])
+        p_vv = LorentzVector(
+            [self.di_neutrino_energy(M_vv, p_vv_z), self.mpx, self.mpy, p_vv_z]
+        )
 
         M_W_onshell = p4_lep_onshell.get_invariant_mass()
-        alpha_squared = M_W_onshell**2 / (2*(p4_lep_onshell.get_energy() * p_vv.get_energy() - np.dot(p4_lep_onshell.get_momentum(), p_vv.get_momentum())))
+        alpha_squared = M_W_onshell**2 / (
+            2
+            * (
+                p4_lep_onshell.get_energy() * p_vv.get_energy()
+                - np.dot(p4_lep_onshell.get_momentum(), p_vv.get_momentum())
+            )
+        )
 
         if alpha_squared < 0:
             alpha_squared = 0
         elif alpha_squared > 1:
             alpha_squared = 1
 
-        square_root = (p_vv.get_energy() - alpha_squared * np.linalg.norm(p_vv.get_momentum()))**2 - (1 - alpha_squared)**2 * np.linalg.norm(p_vv.get_momentum())**2
+        square_root = (
+            p_vv.get_energy() - alpha_squared * np.linalg.norm(p_vv.get_momentum())
+        ) ** 2 - (1 - alpha_squared) ** 2 * np.linalg.norm(p_vv.get_momentum()) ** 2
         if square_root < 0:
             square_root = 0
         M_vf = np.sqrt(square_root)
 
-        p_v_onshell = np.array([0, alpha_squared * p_vv.get_momentum()[0], alpha_squared * p_vv.get_momentum()[1], alpha_squared * p_vv.get_momentum()[2]])
-        p_v_offshell = np.array([M_vf, (1 - alpha_squared) * p_vv.get_momentum()[0], (1 - alpha_squared) * p_vv.get_momentum()[1], (1 - alpha_squared) * p_vv.get_momentum()[2]])
+        p_v_onshell = np.array(
+            [
+                0,
+                alpha_squared * p_vv.get_momentum()[0],
+                alpha_squared * p_vv.get_momentum()[1],
+                alpha_squared * p_vv.get_momentum()[2],
+            ]
+        )
+        p_v_offshell = np.array(
+            [
+                M_vf,
+                (1 - alpha_squared) * p_vv.get_momentum()[0],
+                (1 - alpha_squared) * p_vv.get_momentum()[1],
+                (1 - alpha_squared) * p_vv.get_momentum()[2],
+            ]
+        )
 
         if switched:
             # lep0 = p4_lep_offshell

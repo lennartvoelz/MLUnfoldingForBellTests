@@ -11,7 +11,9 @@ class I_3:
     # Precompute Gell-Mann matrices as class variables
     GMLIST = [None] * 8
 
-    def __init__(self, lep1, lep2, neutrino1, neutrino2, event_type=None, lep0_charge=-1):
+    def __init__(
+        self, lep1, lep2, neutrino1, neutrino2, event_type=None, lep0_charge=-1
+    ):
         self.update_data(lep1, lep2, neutrino1, neutrino2, event_type, lep0_charge)
 
     def update_data(self, lep1, lep2, neutrino1, neutrino2, event_type, lep0_charge=-1):
@@ -149,8 +151,8 @@ class I_3:
         cos_theta_2 = xi_z_2
         phi_1 = np.arctan2(xi_y_1, xi_x_1)
         phi_2 = np.arctan2(xi_y_2, xi_x_2)
-        phi_1 = np.mod(phi_1, 2 * np.pi)
-        phi_2 = np.mod(phi_2, 2 * np.pi)
+        # phi_1 = np.mod(phi_1, 2 * np.pi)
+        # phi_2 = np.mod(phi_2, 2 * np.pi)
 
         vars = np.array([phi_1, phi_2, cos_theta_1, cos_theta_2])
 
@@ -306,6 +308,22 @@ class I_3:
         )
         bell_value = -(4 / 3) * term
         return bell_value
+    
+    @staticmethod
+    def CGLMP_test_batch(gmarrays):
+        """
+        Performs the CGLMP Bell inequality test on an array-like of density matrices.
+
+        Parameters:
+            gmarray (array-like of numpy.ndarray): Iterable of 2D numpy arrays representing density matrices.
+
+        Returns:
+            numpy.ndarray: Array of Bell operator expectation values (floats).
+        """
+        bell_values = []
+        for gm in gmarrays:
+            bell_values.append(I_3.CGLMP_test(gm))
+        return bell_values
 
     def _get_lab_variables(self):
         """

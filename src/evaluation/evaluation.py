@@ -16,7 +16,6 @@ class calculate_results:
         self.reconstructions = {
             label: (array, t) for label, array, t in zip(labels, arrays, types)
         }
-        print(self.reconstructions.keys())
         self.title = title
 
     def calculate_gellmann_coefficients(self, array, type):
@@ -89,48 +88,48 @@ class calculate_results:
             self.colors.append(color_map(idx))
 
             # Concatenate array, type, pw1, pw2 and write to a csv file for each loop iteration
-            data = np.concatenate(
-                (array, t.values.reshape(-1, 1), pW1_num, pW2_num), axis=1
-            )
-            df = pd.DataFrame(
-                data,
-                columns=[
-                    "p_l_1_E_truth",
-                    "p_l_1_x_truth",
-                    "p_l_1_y_truth",
-                    "p_l_1_z_truth",
-                    "p_l_2_E_truth",
-                    "p_l_2_x_truth",
-                    "p_l_2_y_truth",
-                    "p_l_2_z_truth",
-                    "p_v_1_E_truth",
-                    "p_v_1_x_truth",
-                    "p_v_1_y_truth",
-                    "p_v_1_z_truth",
-                    "p_v_2_E_truth",
-                    "p_v_2_x_truth",
-                    "p_v_2_y_truth",
-                    "p_v_2_z_truth",
-                    "type",
-                    "pWFirst1",
-                    "pWFirst2",
-                    "pWFirst3",
-                    "pWFirst4",
-                    "pWFirst5",
-                    "pWFirst6",
-                    "pWFirst7",
-                    "pWFirst8",
-                    "pWSecond1",
-                    "pWSecond2",
-                    "pWSecond3",
-                    "pWSecond4",
-                    "pWSecond5",
-                    "pWSecond6",
-                    "pWSecond7",
-                    "pWSecond8",
-                ],
-            )
-            df.to_csv(f"{label}_data.csv", index=False)
+            # data = np.concatenate(
+            #     (array, t.values.reshape(-1, 1), pW1_num, pW2_num), axis=1
+            # )
+            # df = pd.DataFrame(
+            #     data,
+            #     columns=[
+            #         "p_l_1_E_truth",
+            #         "p_l_1_x_truth",
+            #         "p_l_1_y_truth",
+            #         "p_l_1_z_truth",
+            #         "p_l_2_E_truth",
+            #         "p_l_2_x_truth",
+            #         "p_l_2_y_truth",
+            #         "p_l_2_z_truth",
+            #         "p_v_1_E_truth",
+            #         "p_v_1_x_truth",
+            #         "p_v_1_y_truth",
+            #         "p_v_1_z_truth",
+            #         "p_v_2_E_truth",
+            #         "p_v_2_x_truth",
+            #         "p_v_2_y_truth",
+            #         "p_v_2_z_truth",
+            #         "type",
+            #         "pWFirst1",
+            #         "pWFirst2",
+            #         "pWFirst3",
+            #         "pWFirst4",
+            #         "pWFirst5",
+            #         "pWFirst6",
+            #         "pWFirst7",
+            #         "pWFirst8",
+            #         "pWSecond1",
+            #         "pWSecond2",
+            #         "pWSecond3",
+            #         "pWSecond4",
+            #         "pWSecond5",
+            #         "pWSecond6",
+            #         "pWSecond7",
+            #         "pWSecond8",
+            #     ],
+            # )
+            # df.to_csv(f"{label}_data.csv", index=False)
 
     def plot_gellmann_coefficients(self, target_path):
         """
@@ -142,8 +141,10 @@ class calculate_results:
         for cov_2d, label in zip(self.datasets, self.labels):
             cov_mean = cov_2d.mean(axis=0) / 4
 
-            vmin = cov_mean.min()
-            vmax = cov_mean.max()
+            # vmin = cov_mean.min()
+            # vmax = cov_mean.max()
+            vmin = -0.25
+            vmax = 0.25
 
             norm = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
 
@@ -243,155 +244,6 @@ class calculate_results:
         plt.close()
         print(f"Histogram plot saved to {file_path}")
 
-    def plot_wigner_heatmap(self, target_path, bins=50):
-        """
-        Plots the Wigner 2D heatmap for the Wigner P functions
-        """
-        os.makedirs(target_path, exist_ok=True)
-
-        pW1 = np.array(self.pW1)
-        pW2 = np.array(self.pW2)
-
-        for pW1_num, pW2_num, name in zip(pW1, pW2, self.labels):
-            fig = plt.figure(figsize=(20, 20))
-            fig.suptitle(f"{self.title}", fontsize=30)
-
-            mesh = None
-            # Create an 8x8 grid of heatmaps
-            for i in range(8):
-                for j in range(8):
-                    ax = plt.subplot(8, 8, i * 8 + j + 1)
-
-                    # Plot 2D histogram as heatmap with magma colormap
-                    hist = ax.hist2d(
-                        pW1_num[:, i],
-                        pW2_num[:, j],
-                        bins=bins,
-                        cmap="magma",
-                        # density=True,
-                        norm=LogNorm(vmin=1, vmax=250),
-                    )
-                    mesh = hist[3]  # last QuadMesh for colorbar
-
-                    # Highlight specific subplots with red spines
-                    if (i, j) in [
-                        (0, 2),
-                        (1, 1),
-                        (2, 0),
-                        (4, 3),
-                        (3, 4),
-                        (5, 2),
-                        (7, 5),
-                        (6, 6),
-                        (5, 7),
-                    ]:
-                        for spine in ax.spines.values():
-                            spine.set_color("red")
-                            spine.set_linewidth(4)
-
-                    # Scientific notation on axes
-                    ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-                    ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-                    ax.ticklabel_format(style="sci", axis="both", scilimits=(0, 0))
-
-            # Add a single shared colorbar
-            # cbar = fig.colorbar(mesh, ax=fig.get_axes(), fraction=0.02, pad=0.02)
-            # cbar.set_label('Count', fontsize=20)
-
-            # Global axis labels
-            plt.figtext(0.5, 0.01, r"$pW^+_{i}$", ha="center", fontsize=22)
-            plt.figtext(
-                0.01, 0.5, r"$pW^-_{j}$", va="center", rotation="vertical", fontsize=22
-            )
-
-            # Adjust layout and save
-            plt.tight_layout(rect=[0, 0, 0.95, 0.95])
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"wigner_heatmap_{timestamp}.png"
-            plt.savefig(os.path.join(target_path, filename))
-            plt.close()
-
-    def plot_wigner_heatmap_diff(self, target_path, bins=50):
-        """
-        Plots the Wigner 2D heatmap for the Wigner P functions
-        """
-        os.makedirs(target_path, exist_ok=True)
-
-        pW1 = np.array(self.pW1)
-        pW2 = np.array(self.pW2)
-
-        for pW1_num, pW2_num, name in zip(pW1, pW2, self.labels):
-            fig = plt.figure(figsize=(20, 20))
-            fig.suptitle(f"{self.title}", fontsize=30)
-
-            mesh = None
-            # Create an 8x8 grid of heatmaps
-            for i in range(8):
-                for j in range(8):
-                    ax = plt.subplot(8, 8, i * 8 + j + 1)
-
-                    counts1, xedges, yedges, img1 = ax.hist2d(
-                        pW1_num[:, i],
-                        pW2_num[:, j],
-                        bins=bins,
-                        cmap="magma",
-                    )
-
-                    ax.cla()
-
-                    counts2, xedges2, yedges2, img2 = ax.hist2d(
-                        pW1_num[:, i],  # flip x values
-                        pW2_num[:, j],
-                        bins=bins,
-                        cmap="magma",
-                        # no norm=LogNorm here!
-                    )
-
-                    ax.cla()
-
-                    difference = counts1 - counts2
-
-                    pcm = ax.pcolormesh(xedges, yedges, difference.T, cmap="coolwarm")
-                    fig.colorbar(pcm, ax=ax)
-
-                    # Highlight specific subplots with red spines
-                    if (i, j) in [
-                        (0, 2),
-                        (1, 1),
-                        (2, 0),
-                        (4, 3),
-                        (3, 4),
-                        (5, 2),
-                        (7, 5),
-                        (6, 6),
-                        (5, 7),
-                    ]:
-                        for spine in ax.spines.values():
-                            spine.set_color("red")
-                            spine.set_linewidth(4)
-
-                    # Scientific notation on axes
-                    ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-                    ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-                    ax.ticklabel_format(style="sci", axis="both", scilimits=(0, 0))
-
-            # Add a single shared colorbar
-            # cbar = fig.colorbar(mesh, ax=fig.get_axes(), fraction=0.02, pad=0.02)
-            # cbar.set_label('Count', fontsize=20)
-
-            # Global axis labels
-            plt.figtext(0.5, 0.01, r"$pW^+_{i}$", ha="center", fontsize=22)
-            plt.figtext(
-                0.01, 0.5, r"$pW^-_{j}$", va="center", rotation="vertical", fontsize=22
-            )
-
-            # Adjust layout and save
-            plt.tight_layout(rect=[0, 0, 0.95, 0.95])
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"wigner_heatmap_{timestamp}.png"
-            plt.savefig(os.path.join(target_path, filename))
-            plt.close()
-
     def run(self, target_path):
         self.initialize_datasets()
         self.plot_gellmann_coefficients(target_path)
@@ -408,69 +260,13 @@ class calculate_results_diff_analysis(calculate_results):
         }
         self.title = title
 
-    def plot_wigner_efficiency_heatmap(self, target_path: str, bins: int = 50):
-        """
-        Zeichnet für jede Rekonstruktion eine 8×8-Matrix von 2-D-Heatmaps
-        mit dem relativen Event-Verlust nach Cuts.
-
-        ineff(i,j) = (N_before - N_after) / N_before   in jedem 2-D-Bin
-        """
-        os.makedirs(target_path, exist_ok=True)
-
-        pW1_before_all, pW1_after_all = self.pW1[0], self.pW1[1]
-        pW2_before_all, pW2_after_all = self.pW2[0], self.pW2[1]
-
-        fig = plt.figure(figsize=(20, 20))
-        fig.suptitle(f"{self.title}", fontsize=30)
-
-        for i in range(8):
-            for j in range(8):
-                ax = plt.subplot(8, 8, i * 8 + j + 1)
-
-                counts_bef, xedges, yedges = np.histogram2d(
-                    pW1_before_all[:, i], pW2_before_all[:, j], bins=bins
-                )
-                counts_aft, *_ = np.histogram2d(
-                    pW1_after_all[:, i], pW2_after_all[:, j], bins=[xedges, yedges]
-                )
-
-                with np.errstate(divide="ignore", invalid="ignore"):
-                    ineff = np.where(
-                        counts_bef > 0, (counts_bef - counts_aft) / counts_bef, np.nan
-                    )
-
-                pcm = ax.pcolormesh(
-                    xedges, yedges, ineff.T, cmap="coolwarm", vmin=0, vmax=1
-                )
-
-                fig.colorbar(pcm, ax=ax, fraction=0.046, pad=0.04)
-
-                ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-                ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-                ax.ticklabel_format(style="sci", axis="both", scilimits=(0, 0))
-
-        plt.figtext(0.5, 0.01, r"$pW1_{\,i}$", ha="center", fontsize=22)
-        plt.figtext(
-            0.01, 0.5, r"$pW2_{\,j}$", va="center", rotation="vertical", fontsize=22
-        )
-
-        plt.tight_layout(rect=[0.02, 0.02, 0.98, 0.95])
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        fname = f"wigner_eff_{stamp}.png".replace(" ", "_")
-        plt.savefig(os.path.join(target_path, fname), dpi=150)
-        plt.close(fig)
-
     def plot_2d_angle_hist(self, target_path: str, bins: int = 50):
-        N_cos = 16
-        N_phi = 36
+        N_cos = 12
+        N_phi = 20
         os.makedirs(target_path, exist_ok=True)
 
         cos_edges = np.linspace(-1, 1, N_cos + 1)
-        phi_edges = np.linspace(0, 2 * np.pi, N_phi + 1)
-
-        cos_centers = 0.5 * (cos_edges[:-1] + cos_edges[1:])
-        phi_centers = 0.5 * (phi_edges[:-1] + phi_edges[1:])
-        cos_centers = np.arccos(cos_centers)
+        phi_edges = np.linspace(-np.pi, np.pi, N_phi + 1)
 
         H_Wminus, *_ = np.histogram2d(
             self.angles_[0][:, 2], self.angles_[0][:, 0], bins=[cos_edges, phi_edges]
@@ -494,38 +290,38 @@ class calculate_results_diff_analysis(calculate_results):
         fig, axs = plt.subplots(2, 2, figsize=(20, 20))
         fig.suptitle(f"{self.title}", fontsize=30)
         axs[0, 0].imshow(
-            H_Wminus.T,
+            H_Wminus,
             origin="lower",
             aspect="auto",
             extent=[phi_edges[0], phi_edges[-1], cos_edges[0], cos_edges[-1]],
-            cmap="magma",
+            cmap="Blues",
             interpolation="nearest",
         )
         axs[0, 0].set_title(r"$W^-$ before cuts", fontsize=20)
         axs[0, 1].imshow(
-            H_Wplus.T,
+            H_Wplus,
             origin="lower",
             aspect="auto",
             extent=[phi_edges[0], phi_edges[-1], cos_edges[0], cos_edges[-1]],
-            cmap="magma",
+            cmap="Blues",
             interpolation="nearest",
         )
         axs[0, 1].set_title(r"$W^+$ before cuts", fontsize=20)
         axs[1, 0].imshow(
-            H_Wminus_cuts.T,
+            H_Wminus_cuts,
             origin="lower",
             aspect="auto",
             extent=[phi_edges[0], phi_edges[-1], cos_edges[0], cos_edges[-1]],
-            cmap="magma",
+            cmap="Blues",
             interpolation="nearest",
         )
         axs[1, 0].set_title(r"$W^-$ after cuts", fontsize=20)
         axs[1, 1].imshow(
-            H_Wplus_cuts.T,
+            H_Wplus_cuts,
             origin="lower",
             aspect="auto",
             extent=[phi_edges[0], phi_edges[-1], cos_edges[0], cos_edges[-1]],
-            cmap="magma",
+            cmap="Blues",
             interpolation="nearest",
         )
         axs[1, 1].set_title(r"$W^+$ after cuts", fontsize=20)
@@ -535,39 +331,86 @@ class calculate_results_diff_analysis(calculate_results):
             ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
             ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
             ax.ticklabel_format(style="sci", axis="both", scilimits=(0, 0))
-        plt.colorbar(axs[0, 0].images[0], ax=axs[:, 0], orientation="vertical", fraction=0.02, pad=0.04)
-        plt.colorbar(axs[0, 1].images[0], ax=axs[:, 1], orientation="vertical", fraction=0.02, pad=0.04)
-        plt.colorbar(axs[1, 0].images[0], ax=axs[:, 0], orientation="vertical", fraction=0.02, pad=0.04)
-        plt.colorbar(axs[1, 1].images[0], ax=axs[:, 1], orientation="vertical", fraction=0.02, pad=0.04)
+        plt.colorbar(
+            axs[0, 0].images[0],
+            ax=axs[:, 0],
+            orientation="vertical",
+            fraction=0.02,
+            pad=0.04,
+        )
+        plt.colorbar(
+            axs[0, 1].images[0],
+            ax=axs[:, 1],
+            orientation="vertical",
+            fraction=0.02,
+            pad=0.04,
+        )
+        plt.colorbar(
+            axs[1, 0].images[0],
+            ax=axs[:, 0],
+            orientation="vertical",
+            fraction=0.02,
+            pad=0.04,
+        )
+        plt.colorbar(
+            axs[1, 1].images[0],
+            ax=axs[:, 1],
+            orientation="vertical",
+            fraction=0.02,
+            pad=0.04,
+        )
         plt.tight_layout(rect=[0.02, 0.02, 0.98, 0.95])
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         fname = f"2d_angle_hist_{stamp}.png".replace(" ", "_")
         plt.savefig(os.path.join(target_path, fname), dpi=150)
         plt.close(fig)
 
-        # Mirror the histograms for W+ with cuts and subtract from W- with cuts
-        H_Wplus_mirror = np.flipud(H_Wplus_cuts)
-        H_diff = H_Wminus_cuts - H_Wplus_mirror
-        fig, ax = plt.subplots(figsize=(10, 10))
-        fig.suptitle(f"{self.title} - W- minus mirrored W+", fontsize=30)
-        im = ax.imshow(
-            H_diff.T,
+        # Substract before cuts from after cuts
+        H_Wminus_diff = H_Wminus_cuts - H_Wminus
+        H_Wplus_diff = H_Wplus_cuts - H_Wplus
+        fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+        fig.suptitle(f"{self.title}", fontsize=30)
+        axs[0].imshow(
+            H_Wminus_diff,
             origin="lower",
             aspect="auto",
             extent=[phi_edges[0], phi_edges[-1], cos_edges[0], cos_edges[-1]],
-            cmap="coolwarm",
+            cmap="Blues",
             interpolation="nearest",
         )
-        cbar = fig.colorbar(im, ax=ax)
-        cbar.set_label("Difference", fontsize=20)
-        ax.set_xlabel(r"$\phi$", fontsize=20)
-        ax.set_ylabel(r"$\cos(\theta)$", fontsize=20)
-        ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-        ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-        ax.ticklabel_format(style="sci", axis="both", scilimits=(0, 0))
+        axs[0].set_title(r"$W^-$ difference", fontsize=20)
+        axs[1].imshow(
+            H_Wplus_diff,
+            origin="lower",
+            aspect="auto",
+            extent=[phi_edges[0], phi_edges[-1], cos_edges[0], cos_edges[-1]],
+            cmap="Blues",
+            interpolation="nearest",
+        )
+        axs[1].set_title(r"$W^+$ difference", fontsize=20)
+        for ax in axs.flat:
+            ax.set_xlabel(r"$\phi$", fontsize=20)
+            ax.set_ylabel(r"$\cos(\theta)$", fontsize=20)
+            ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+            ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+            ax.ticklabel_format(style="sci", axis="both", scilimits=(0, 0))
+        plt.colorbar(
+            axs[0].images[0],
+            ax=axs[0],
+            orientation="vertical",
+            fraction=0.02,
+            pad=0.04,
+        )
+        plt.colorbar(
+            axs[1].images[0],
+            ax=axs[1],
+            orientation="vertical",
+            fraction=0.02,
+            pad=0.04,
+        )
         plt.tight_layout(rect=[0.02, 0.02, 0.98, 0.95])
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        fname = f"2d_angle_hist_diff_{stamp}.png".replace(" ", "_")
+        fname = f"2d_angle_hist_{stamp}.png".replace(" ", "_")
         plt.savefig(os.path.join(target_path, fname), dpi=150)
         plt.close(fig)
 
@@ -627,8 +470,128 @@ class calculate_results_diff_analysis(calculate_results):
             plt.savefig(os.path.join(target_path, fname), dpi=150)
             plt.close(fig)
 
+    def bell_inequality_batch(self, target_path, bins=50):
+        os.makedirs(target_path, exist_ok=True)
+
+        # Create list to store all density matrices for batch processing
+        density_matrices = []
+
+        for i in range(2):  # For each dataset (truth/reconstruction)
+            for j in range(len(self.pW1[i])):  # For each event
+                # Create 9x9 density matrix for this event
+                mat = np.zeros((9, 9))
+
+                # Fill covariance terms (indices 1-8, 1-8)
+                for k in range(1, 9):
+                    for m in range(1, 9):
+                        mat[k, m] = self.datasets[i][j][k - 1, m - 1] / 4.0
+
+                # Fill pW1 terms (row 0, columns 1-8)
+                for k in range(1, 9):
+                    mat[0, k] = self.pW2[i][j][k - 1] / 2.0
+
+                # Fill pW2 terms (column 0, rows 1-8)
+                for k in range(1, 9):
+                    mat[k, 0] = self.pW1[i][j][k - 1] / 2.0
+
+                density_matrices.append(mat)
+
+        # Now pass the list of 2D matrices to the batch function
+        bell_values = I_3.CGLMP_test_batch(density_matrices)
+
+        # Plot the bell values for both datasets
+        fig, ax = plt.subplots(figsize=(6, 4))
+        fig.suptitle(f"{self.title}: Bell Inequality", fontsize=18)
+
+        dataset_bell_values = []
+        for i, label in enumerate(self.labels):
+            # Extract bell values for this dataset
+            bell_values_dataset = bell_values[
+                i * len(self.pW1[0]) : (i + 1) * len(self.pW1[0])
+            ]
+            dataset_bell_values.append(bell_values_dataset)
+            ax.hist(
+                bell_values_dataset,
+                bins=bins,
+                label=label,
+                alpha=0.5,
+                density=True,
+            )
+
+        ax.set_xlabel("Bell Value")
+        ax.set_ylabel("Normalised Counts")
+        ax.legend(fontsize=8)
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        fname = f"bell_inequality_{datetime.now():%Y%m%d_%H%M%S}.png"
+        plt.savefig(os.path.join(target_path, fname), dpi=150)
+        plt.close(fig)
+
+        # Print statistics for each dataset
+        for i, (label, bell_vals) in enumerate(zip(self.labels, dataset_bell_values)):
+            print(f"Mean Bell inequality for {label}: {np.mean(bell_vals):.6f}")
+
+            # Most probable value
+            hist, bin_edges = np.histogram(bell_vals, bins=bins, density=True)
+            most_probable_bin = np.argmax(hist)
+            most_probable_value = 0.5 * (
+                bin_edges[most_probable_bin] + bin_edges[most_probable_bin + 1]
+            )
+            print(f"Most probable Bell value for {label}: {most_probable_value:.6f}")
+
+        return bell_values
+
+    def bell_inequality_averaged(self, target_path):
+        """
+        Calculate Bell inequality values using averaged density matrices.
+        First averages cov, pW1, pW2 over all events, then creates one density matrix
+        per dataset and calculates one Bell value per dataset.
+        """
+        os.makedirs(target_path, exist_ok=True)
+
+        averaged_bell_values = []
+
+        print(len(self.datasets[0]))
+        print(len(self.pW1[0]))
+        print(len(self.pW2[0]))
+
+        print(len(self.datasets[1]))
+        print(len(self.pW1[1]))
+        print(len(self.pW2[1]))
+
+        for i in range(len(self.labels)):  # For each dataset (truth/reconstruction)
+            # Average over all events for this dataset
+            avg_cov = np.mean(self.datasets[i], axis=0)  # Average covariance matrix
+            avg_pW1 = np.mean(self.pW1[i], axis=0)  # Average pW1 coefficients
+            avg_pW2 = np.mean(self.pW2[i], axis=0)  # Average pW2 coefficients
+
+            # Create averaged 9x9 density matrix
+            avg_mat = np.zeros((9, 9))
+
+            # Fill covariance terms (indices 1-8, 1-8)
+            for k in range(1, 9):
+                for m in range(1, 9):
+                    avg_mat[k, m] = avg_cov[k - 1, m - 1] / 4.0
+
+            # Fill pW1 terms (row 0, columns 1-8)
+            for k in range(1, 9):
+                avg_mat[0, k] = avg_pW2[k - 1] / 2.0
+
+            # Fill pW2 terms (column 0, rows 1-8)
+            for k in range(1, 9):
+                avg_mat[k, 0] = avg_pW1[k - 1] / 2.0
+
+            # Calculate single Bell value for this averaged matrix
+            bell_value = I_3.CGLMP_test(avg_mat)
+            averaged_bell_values.append(bell_value)
+
+            print(f"Averaged Bell inequality for {self.labels[i]}: {bell_value:.6f}")
+
+        return averaged_bell_values
+
     def run(self, target_path):
         self.initialize_datasets()
-        self.plot_wigner_efficiency_heatmap(target_path)
         self.plot_2d_angle_hist(target_path)
         self.plot_wignerP_1d_hist(target_path)
+        self.bell_inequality_batch(target_path)
+        self.bell_inequality_averaged(target_path)

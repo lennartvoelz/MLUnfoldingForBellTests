@@ -2,7 +2,9 @@ from src.evaluation.evaluation import calculate_results, calculate_results_diff_
 import numpy as np
 import pandas as pd
 
-data = pd.read_csv("data/hww_1M_MG5_final_truth.csv")
+data = pd.read_csv("data/hww_1M_MG_final_truth.csv")
+length = len(data)
+data = data[: length // 10]
 X = data[
     [
         "p_l_1_E_truth",
@@ -31,7 +33,9 @@ types = data["Event.Type"].copy()
 
 final_state = np.concatenate((X, y), axis=1)
 
-data_cuts = pd.read_csv("data/hww_1M_MG5_final_truth_cuts.csv")
+data_cuts = pd.read_csv("data/hww_1M_MG_final_truth_cuts.csv")
+length_cuts = len(data_cuts)
+data_cuts = data_cuts[: length_cuts // 10]
 X_cuts = data_cuts[
     [
         "p_l_1_E_truth",
@@ -63,14 +67,14 @@ final_state_cuts = np.concatenate((X_cuts, y_cuts), axis=1)
 result = calculate_results(
     arrays=[final_state, final_state_cuts],
     labels=["Truth", "Cuts"],
-    title="Cuts Analysis",
+    title="Cuts Analysis HWW",
     types=[types, types_cuts],
 )
 result.run("reports/")
 diff_result = calculate_results_diff_analysis(
     arrays=[final_state, final_state_cuts],
     labels=["Truth", "Cuts"],
-    title="Diff Analysis",
+    title="Diff Analysis HWW",
     types=[types, types_cuts],
 )
 diff_result.run("reports/")
