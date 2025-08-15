@@ -103,7 +103,7 @@ class I_3:
         y = np.dot(p, k)
         r = np.sqrt(1 - y**2)
         if r == 0:
-            r = 0.0001
+            r = 0.0000001
 
         r_vec = (p - y * k) / r
         n = np.cross(p, k) / r
@@ -139,7 +139,7 @@ class I_3:
         xi_y_1 = np.clip(xi_y_1, -1, 1)
         xi_z_1 = np.clip(xi_z_1, -1, 1)
 
-        xi_x_2 = np.clip(xi_x_2, -1, 1)
+        xi_x_2 = np.clip(xi_x_2, -1, 1)  
         xi_y_2 = np.clip(xi_y_2, -1, 1)
         xi_z_2 = np.clip(xi_z_2, -1, 1)
 
@@ -151,8 +151,6 @@ class I_3:
         cos_theta_2 = xi_z_2
         phi_1 = np.arctan2(xi_y_1, xi_x_1)
         phi_2 = np.arctan2(xi_y_2, xi_x_2)
-        # phi_1 = np.mod(phi_1, 2 * np.pi)
-        # phi_2 = np.mod(phi_2, 2 * np.pi)
 
         vars = np.array([phi_1, phi_2, cos_theta_1, cos_theta_2])
 
@@ -173,7 +171,7 @@ class I_3:
 
         for i in range(8):
             for j in range(8):
-                self.cov[i][j] = self.cov[i][j] + (pW2_event[i] * pW1_event[j])
+                self.cov[i][j] = pW2_event[i] * pW1_event[j]
                 self.cov_sym[i][j] = (
                     self.cov_sym[i][j]
                     + (pW2_event[i] * pW1_event[j])
@@ -300,15 +298,19 @@ class I_3:
         Returns:
             float: Expectation value of the Bell operator.
         """
-        sqrt3 = np.sqrt(3)
-        term = (
-            sqrt3 * (gmarray[0, 0] + gmarray[0, 5] + gmarray[1, 1] + gmarray[1, 6])
-            - 3 * (gmarray[3, 3] + gmarray[4, 4])
-            + sqrt3 * (gmarray[5, 0] + gmarray[5, 5] + gmarray[6, 1] + gmarray[6, 6])
+        sqrt23 = np.sqrt(2 / 3)
+        bell_value = (gmarray[3, 3] + gmarray[4, 4]) + (-sqrt23) * (
+            gmarray[0, 0]
+            + gmarray[0, 5]
+            + gmarray[5, 5]
+            + gmarray[5, 0]
+            + gmarray[1, 1]
+            + gmarray[1, 6]
+            + gmarray[6, 6]
+            + gmarray[6, 1]
         )
-        bell_value = -(4 / 3) * term
         return bell_value
-    
+
     @staticmethod
     def CGLMP_test_batch(gmarrays):
         """

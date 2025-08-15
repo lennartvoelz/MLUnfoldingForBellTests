@@ -6,9 +6,6 @@ from matplotlib.ticker import ScalarFormatter
 import matplotlib.colors as mcolors
 from datetime import datetime
 import os
-from scipy import stats
-from matplotlib.colors import LogNorm
-import pandas as pd
 
 
 class calculate_results:
@@ -60,6 +57,12 @@ class calculate_results:
 
         cov_2d = cov
         cov_sym_2d = cov_sym
+
+        cov_avg = np.mean(cov, axis=0)
+        mat = cov_avg
+
+        bell = I_3.CGLMP_test(mat)
+        print("Bell Value: ", bell)
 
         return pW1, pW2, cov_2d, cov_sym_2d, angles_
 
@@ -141,22 +144,23 @@ class calculate_results:
         for cov_2d, label in zip(self.datasets, self.labels):
             cov_mean = cov_2d.mean(axis=0) / 4
 
-            # vmin = cov_mean.min()
-            # vmax = cov_mean.max()
-            vmin = -0.25
-            vmax = 0.25
+            vmin = cov_mean.min()
+            vmax = cov_mean.max()
 
             norm = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
 
             plt.figure(figsize=(8, 6))
             plt.imshow(cov_mean, cmap="seismic", norm=norm, interpolation="nearest")
-            plt.colorbar()
+            cbar = plt.colorbar()
+            cbar.ax.tick_params(labelsize=13)
 
-            plt.title(f"Coefficients $c_{{ij}}$ - {self.title}", fontsize=16)
-            plt.xlabel(r"$W^+$ Index $j$", fontsize=14)
-            plt.ylabel(r"$W^-$ Index $i$", fontsize=14)
+            # plt.title(f"Coefficients $c_{{ij}}$ - {self.title}", fontsize=16)
+            plt.xlabel(r"$W^+$ Index $j$", fontsize=16)
+            plt.ylabel(r"$W^-$ Index $i$", fontsize=16)
             plt.gca().invert_yaxis()
             plt.tight_layout()
+            plt.xticks(fontsize=18)
+            plt.yticks(fontsize=18)
 
             # Create a unique identifier based on current date and time and add the label
             current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -470,100 +474,130 @@ class calculate_results_diff_analysis(calculate_results):
             plt.savefig(os.path.join(target_path, fname), dpi=150)
             plt.close(fig)
 
-    def bell_inequality_batch(self, target_path, bins=50):
-        os.makedirs(target_path, exist_ok=True)
+    def efficiency_map(self):
+        N_cos = 18
+        N_phi = 32
 
-        density_matrices = []
+        cos_edges = np.linspace(-1, 1, N_cos + 1)
+        phi_edges = np.linspace(-np.pi, np.pi, N_phi + 1)
 
-        for i in range(2):
-            for j in range(len(self.pW1[i])):
-                mat = np.zeros((9, 9))
-
-                for k in range(1, 9):
-                    for m in range(1, 9):
-                        mat[k, m] = self.datasets[i][j][k - 1, m - 1] / 4.0
-
-                for k in range(1, 9):
-                    mat[0, k] = self.pW2[i][j][k - 1] / 2.0
-                    mat[k, 0] = self.pW1[i][j][k - 1] / 2.0
-
-                density_matrices.append(mat)
-
-        bell_values = I_3.CGLMP_test_batch(density_matrices)
-
-        fig, ax = plt.subplots(figsize=(6, 4))
-        fig.suptitle(f"{self.title}: Bell Inequality", fontsize=18)
-
-        dataset_bell_values = []
-        for i, label in enumerate(self.labels):
-            bell_values_dataset = bell_values[
-                i * len(self.pW1[0]) : (i + 1) * len(self.pW1[0])
+        stacked_angles_pre = np.column_stack(
+            [
+                self.angles_[0][:, 2],
+                self.angles_[0][:, 0],
+                self.angles_[0][:, 3],
+                self.angles_[0][:, 1],
             ]
-            dataset_bell_values.append(bell_values_dataset)
-            ax.hist(
-                bell_values_dataset,
-                bins=bins,
-                label=label,
-                alpha=0.5,
-                density=True,
-            )
+        )
+        stacked_angles_post = np.column_stack(
+            [
+                self.angles_[1][:, 2],
+                self.angles_[1][:, 0],
+                self.angles_[1][:, 3],
+                self.angles_[1][:, 1],
+            ]
+        )
 
-        ax.set_xlabel("Bell Value")
-        ax.set_ylabel("Normalised Counts")
-        ax.legend(fontsize=8)
-        ax.grid(True, alpha=0.3)
+        finite_mask = np.isfinite(stacked_angles_pre).all(axis=1)
+        stacked_angles_pre = stacked_angles_pre[finite_mask]
+        finite_mask = np.isfinite(stacked_angles_post).all(axis=1)
+        stacked_angles_post = stacked_angles_post[finite_mask]
+
+        bins = [cos_edges, phi_edges, cos_edges, phi_edges]
+
+        H_all, _ = np.histogramdd(stacked_angles_pre, bins=bins)
+        H_pass, _ = np.histogramdd(stacked_angles_post, bins=bins)
+
+        eff4d = np.divide(
+            H_pass, H_all, out=np.zeros_like(H_pass, dtype=float), where=H_all > 1e-5
+        )
+
+        # alpha = 0.5  # Jeffreys
+        # eff4d = (H_pass + alpha) / (H_all + 2*alpha)
+
+        return eff4d, cos_edges, phi_edges
+
+    @staticmethod
+    def get_efficiency_weights_4d(
+        cos_minus, phi_minus, cos_plus, phi_plus, eff4d, edges, default=0.0
+    ):
+        """
+        Vectorized per-event weights from the 4D efficiency map.
+        """
+        cos_em, phi_em, cos_ep, phi_ep = edges
+
+        # Bin indices (digitize returns 1..len-1 for interior; shift to 0-based)
+        i_cm = np.digitize(cos_minus, cos_em) - 1
+        i_pm = np.digitize(phi_minus, phi_em) - 1
+        i_cp = np.digitize(cos_plus, cos_ep) - 1
+        i_pp = np.digitize(phi_plus, phi_ep) - 1
+
+        # Clip to valid interior bins [0, len-2]
+        i_cm = np.clip(i_cm, 0, len(cos_em) - 2)
+        i_pm = np.clip(i_pm, 0, len(phi_em) - 2)
+        i_cp = np.clip(i_cp, 0, len(cos_ep) - 2)
+        i_pp = np.clip(i_pp, 0, len(phi_ep) - 2)
+
+        # Gather efficiencies
+        eff_vals = eff4d[i_cm, i_pm, i_cp, i_pp]
+
+        # Safe inversion: 1/eff, with fill-in for zeros
+        weights = np.divide(
+            1.0,
+            eff_vals,
+            out=np.full_like(eff_vals, default, dtype=float),
+            where=eff_vals > 0,
+        )
+        return weights, eff_vals
+
+    @staticmethod
+    def compute_weighted_covariance(pW1, pW2, weights):
+        num_samples = len(pW1)
+        cov_weighted = np.zeros((8, 8))
+
+        pW1 = np.array(pW1)
+        pW2 = np.array(pW2)
+
+        for i in range(8):
+            for j in range(8):
+                cov_weighted[i][j] = np.sum(weights * pW2[:, i] * pW1[:, j])
+
+        return cov_weighted / num_samples
+
+    @staticmethod
+    def plot_gellmann_weighted(cov_mean, target_path):
+        cov_mean = cov_mean / 4.0
+        vmin = cov_mean.min()
+        vmax = cov_mean.max()
+
+        norm = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+
+        plt.figure(figsize=(8, 6))
+        plt.imshow(cov_mean, cmap="seismic", norm=norm, interpolation="nearest")
+        cbar = plt.colorbar()
+        cbar.ax.tick_params(labelsize=18)
+
+        # plt.title(f"Coefficients $c_{{ij}}$ - {'Weighted'}", fontsize=16)
+
+        plt.xlabel(r"$W^+$ Index $j$", fontsize=25)
+        plt.ylabel(r"$W^-$ Index $i$", fontsize=25)
+        plt.gca().invert_yaxis()
         plt.tight_layout()
-        fname = f"bell_inequality_{datetime.now():%Y%m%d_%H%M%S}.png"
-        plt.savefig(os.path.join(target_path, fname), dpi=150)
-        plt.close(fig)
+        plt.xticks(fontsize=20)
+        plt.yticks(fontsize=20)
 
-        for i, (label, bell_vals) in enumerate(zip(self.labels, dataset_bell_values)):
-            print(f"Mean Bell inequality for {label}: {np.mean(bell_vals):.6f}")
+        # Create a unique identifier based on current date and time and add the label
+        current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"coefficients_plot_weighted_{current_datetime}.png"
 
-            hist, bin_edges = np.histogram(bell_vals, bins=bins, density=True)
-            most_probable_bin = np.argmax(hist)
-            most_probable_value = 0.5 * (
-                bin_edges[most_probable_bin] + bin_edges[most_probable_bin + 1]
-            )
-            print(f"Most probable Bell value for {label}: {most_probable_value:.6f}")
-
-        return bell_values
-
-    def bell_inequality_averaged(self, target_path):
-        """
-        Calculate Bell inequality values using averaged density matrices.
-        First averages cov, pW1, pW2 over all events, then creates one density matrix
-        per dataset and calculates one Bell value per dataset.
-        """
         os.makedirs(target_path, exist_ok=True)
+        file_path = os.path.join(target_path, filename)
 
-        averaged_bell_values = []
-
-        for i in range(len(self.labels)):
-            avg_cov = np.mean(self.datasets[i], axis=0)
-            avg_pW1 = np.mean(self.pW1[i], axis=0)
-            avg_pW2 = np.mean(self.pW2[i], axis=0)
-
-            avg_mat = np.zeros((9, 9))
-
-            for k in range(1, 9):
-                for m in range(1, 9):
-                    avg_mat[k, m] = avg_cov[k - 1, m - 1] / 4.0
-
-            for k in range(1, 9):
-                avg_mat[0, k] = avg_pW2[k - 1] / 2.0
-                avg_mat[k, 0] = avg_pW1[k - 1] / 2.0
-
-            bell_value = I_3.CGLMP_test(avg_mat)
-            averaged_bell_values.append(bell_value)
-
-            print(f"Averaged Bell inequality for {self.labels[i]}: {bell_value:.6f}")
-
-        return averaged_bell_values
+        plt.savefig(file_path)
+        plt.close()
+        print(f"Weighted plot saved to {file_path}")
 
     def run(self, target_path):
         self.initialize_datasets()
         self.plot_2d_angle_hist(target_path)
         self.plot_wignerP_1d_hist(target_path)
-        self.bell_inequality_batch(target_path)
-        self.bell_inequality_averaged(target_path)
