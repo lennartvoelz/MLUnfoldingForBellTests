@@ -471,176 +471,85 @@ class DataPreprocessor:
         return np.abs(1 / 2 * np.log((p + pz) / (p - pz)))
 
     def apply_selection_cuts(self, use_event_type=True):
-        # ML dataset
-        self.X = self.X.assign(lep0_pT=self.p_T(self.X["p_l_1_x"], self.X["p_l_1_y"]))
-        self.X = self.X.assign(lep1_pT=self.p_T(self.X["p_l_2_x"], self.X["p_l_2_y"]))
-        self.X = self.X.assign(
-            lep0_p=self.p(self.X["p_l_1_x"], self.X["p_l_1_y"], self.X["p_l_1_z"])
-        )
-        self.X = self.X.assign(
-            lep1_p=self.p(self.X["p_l_2_x"], self.X["p_l_2_y"], self.X["p_l_2_z"])
-        )
-        self.X = self.X.assign(lep0_eta=self.eta(self.X["lep0_p"], self.X["p_l_1_z"]))
-        self.X = self.X.assign(lep1_eta=self.eta(self.X["lep1_p"], self.X["p_l_2_z"]))
+        eps = 1e-15
 
-        # Either use Event.Type to differentiate between electron and muon
+        # helper to compute pT, |eta|
+        def kin(px, py, pz):
+            pT = np.hypot(px, py)
+            p = np.sqrt(pT**2 + pz**2)
+            eta = 0.5 * np.log((p + pz + eps) / (p - pz + eps))
+            return pT, np.abs(eta)
+
+        # build detector-level mask ONCE using self.detector_sim
+        d = self.detector_sim
+        d_pT1, d_eta1 = kin(
+            d["p_l_1_x"].to_numpy(), d["p_l_1_y"].to_numpy(), d["p_l_1_z"].to_numpy()
+        )
+        d_pT2, d_eta2 = kin(
+            d["p_l_2_x"].to_numpy(), d["p_l_2_y"].to_numpy(), d["p_l_2_z"].to_numpy()
+        )
+        evt = self.data["Event.Type"].to_numpy()
+
         if use_event_type:
-            # Common cut
-            mask = (self.X.lep0_pT > 22.0) & (self.X.lep1_pT > 15.0)
-
-            # Conditional cuts based on Event.Type
-            print(self.X.columns)
-            type1_mask = (
-                (self.X["Event.Type"] == 0)
-                & (self.X.lep0_eta < 2.47)
-                & (self.X.lep1_eta < 2.5)
+            is_ee, is_mumu = (evt == 0), (evt == 1)
+            det_mask = (
+                (d_pT1 > 22.0)
+                & (d_pT2 > 15.0)
+                & (
+                    (is_ee & (d_eta1 < 2.47) & (d_eta2 < 2.5))
+                    | (is_mumu & (d_eta1 < 2.5) & (d_eta2 < 2.47))
+                )
             )
-            type2_mask = (
-                (self.X["Event.Type"] == 1)
-                & (self.X.lep0_eta < 2.5)
-                & (self.X.lep1_eta < 2.47)
-            )
-
-            full_mask = mask & (type1_mask | type2_mask)
-
-            self.X = self.X[full_mask].copy()
-        # Or do not and use 2.5
         else:
-            self.X = self.X[
-                (self.X.lep0_pT > 22.0)
-                & (self.X.lep1_pT > 15.0)
-                & (self.X.lep0_eta < 2.5)
-                & (self.X.lep1_eta < 2.5)
-            ]
+            det_mask = (d_pT1 > 22.0) & (d_pT2 > 15.0) & (d_eta1 < 2.5) & (d_eta2 < 2.5)
 
-        self.y = self.y.loc[self.X.index]
-
-        self.X = self.X.drop(
-            columns=["lep0_pT", "lep1_pT", "lep0_p", "lep1_p", "lep0_eta", "lep1_eta"]
+        # OPTIONAL: also require truth to pass similar cuts (use only if you intend symmetry)
+        t = self.truth
+        t_pT1, t_eta1 = kin(
+            t["p_l_1_x_truth"].to_numpy(),
+            t["p_l_1_y_truth"].to_numpy(),
+            t["p_l_1_z_truth"].to_numpy(),
         )
-
-        # Detector simulation
-        self.detector_sim = self.detector_sim.assign(
-            lep0_pT=self.p_T(self.detector_sim["p_l_1_x"], self.detector_sim["p_l_1_y"])
-        )
-        self.detector_sim = self.detector_sim.assign(
-            lep1_pT=self.p_T(self.detector_sim["p_l_2_x"], self.detector_sim["p_l_2_y"])
-        )
-        self.detector_sim = self.detector_sim.assign(
-            lep0_p=self.p(
-                self.detector_sim["p_l_1_x"],
-                self.detector_sim["p_l_1_y"],
-                self.detector_sim["p_l_1_z"],
-            )
-        )
-        self.detector_sim = self.detector_sim.assign(
-            lep1_p=self.p(
-                self.detector_sim["p_l_2_x"],
-                self.detector_sim["p_l_2_y"],
-                self.detector_sim["p_l_2_z"],
-            )
-        )
-        self.detector_sim = self.detector_sim.assign(
-            lep0_eta=self.eta(self.detector_sim["lep0_p"], self.detector_sim["p_l_1_z"])
-        )
-        self.detector_sim = self.detector_sim.assign(
-            lep1_eta=self.eta(self.detector_sim["lep1_p"], self.detector_sim["p_l_2_z"])
+        t_pT2, t_eta2 = kin(
+            t["p_l_2_x_truth"].to_numpy(),
+            t["p_l_2_y_truth"].to_numpy(),
+            t["p_l_2_z_truth"].to_numpy(),
         )
 
-        # Either use Event.Type to differentiate between electron and muon
         if use_event_type:
-            # Common cut
-            mask = (self.detector_sim.lep0_pT > 22.0) & (
-                self.detector_sim.lep1_pT > 10.0
+            is_ee, is_mumu = (evt == 0), (evt == 1)
+            tru_mask = (
+                (t_pT1 > 22.0)
+                & (t_pT2 > 15.0)
+                & (
+                    (is_ee & (t_eta1 < 2.47) & (t_eta2 < 2.5))
+                    | (is_mumu & (t_eta1 < 2.5) & (t_eta2 < 2.47))
+                )
             )
-
-            # Conditional cuts based on Event.Type
-            type1_mask = (
-                (self.detector_sim["Event.Type"] == 0)
-                & (self.detector_sim.lep0_eta < 2.47)
-                & (self.detector_sim.lep1_eta < 2.5)
-            )
-            type2_mask = (
-                (self.detector_sim["Event.Type"] == 1)
-                & (self.detector_sim.lep0_eta < 2.5)
-                & (self.detector_sim.lep1_eta < 2.47)
-            )
-
-            full_mask = mask & (type1_mask | type2_mask)
-
-            self.detector_sim = self.detector_sim[full_mask].copy()
-        # Or do not and use 2.5
         else:
-            self.detector_sim = self.detector_sim[
-                (self.detector_sim.lep0_pT > 22.0)
-                & (self.detector_sim.lep1_pT > 10.0)
-                & (self.detector_sim.lep0_eta < 2.5)
-                & (self.detector_sim.lep1_eta < 2.5)
-            ]
+            tru_mask = (t_pT1 > 22.0) & (t_pT2 > 15.0) & (t_eta1 < 2.5) & (t_eta2 < 2.5)
 
-        self.detector_sim = self.detector_sim.drop(
-            columns=["lep0_pT", "lep1_pT", "lep0_p", "lep1_p", "lep0_eta", "lep1_eta"]
-        )
+        # final shared index: intersection of the masks (and any earlier drop_zeroes index)
+        idx_keep = self.data.index[
+            det_mask & tru_mask
+        ]  # or det_mask only, if that’s your policy
 
-        # Truth
-        self.truth = self.truth.assign(
-            lep0_pT=self.p_T(self.truth["p_l_1_x_truth"], self.truth["p_l_1_y_truth"])
-        )
-        self.truth = self.truth.assign(
-            lep1_pT=self.p_T(self.truth["p_l_2_x_truth"], self.truth["p_l_2_y_truth"])
-        )
-        self.truth = self.truth.assign(
-            lep0_p=self.p(
-                self.truth["p_l_1_x_truth"],
-                self.truth["p_l_1_y_truth"],
-                self.truth["p_l_1_z_truth"],
-            )
-        )
-        self.truth = self.truth.assign(
-            lep1_p=self.p(
-                self.truth["p_l_2_x_truth"],
-                self.truth["p_l_2_y_truth"],
-                self.truth["p_l_2_z_truth"],
-            )
-        )
-        self.truth = self.truth.assign(
-            lep0_eta=self.eta(self.truth["lep0_p"], self.truth["p_l_1_z_truth"])
-        )
-        self.truth = self.truth.assign(
-            lep1_eta=self.eta(self.truth["lep1_p"], self.truth["p_l_2_z_truth"])
-        )
+        # apply the SAME index to all views
+        self.X = self.X.loc[idx_keep].copy()
+        self.y = self.y.loc[idx_keep].copy()
+        self.detector_sim = self.detector_sim.loc[idx_keep].copy()
+        self.truth = self.truth.loc[idx_keep].copy()
+        self.types = self.types.loc[idx_keep].copy()
 
-        # Either use Event.Type to differentiate between electron and muon
-        if use_event_type:
-            # Common cut
-            mask = (self.truth.lep0_pT > 22.0) & (self.truth.lep1_pT > 10.0)
-
-            # Conditional cuts based on Event.Type
-            type1_mask = (
-                (self.truth["Event.Type"] == 0)
-                & (self.truth.lep0_eta < 2.47)
-                & (self.truth.lep1_eta < 2.5)
-            )
-            type2_mask = (
-                (self.truth["Event.Type"] == 1)
-                & (self.truth.lep0_eta < 2.5)
-                & (self.truth.lep1_eta < 2.47)
-            )
-
-            full_mask = mask & (type1_mask | type2_mask)
-
-            self.truth = self.truth[full_mask].copy()
-        # Or do not and use 2.5
-        else:
-            self.truth = self.truth[
-                (self.truth.lep0_pT > 22.0)
-                & (self.truth.lep1_pT > 10.0)
-                & (self.truth.lep0_eta < 2.5)
-                & (self.truth.lep1_eta < 2.5)
-            ]
-
-        self.truth = self.truth.drop(
-            columns=["lep0_pT", "lep1_pT", "lep0_p", "lep1_p", "lep0_eta", "lep1_eta"]
+        # sanity
+        n = len(idx_keep)
+        assert (
+            len(self.X)
+            == len(self.y)
+            == len(self.detector_sim)
+            == len(self.truth)
+            == len(self.types)
+            == n
         )
 
     def run_preprocessing(self, return_numpy=True) -> tuple:

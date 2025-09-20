@@ -62,9 +62,17 @@ class calculate_results:
         mat = cov_avg
 
         bell = I_3.CGLMP_test(mat)
+        bell_values = I_3.CGLMP_test_batch(cov)
         print("Bell Value: ", bell)
 
-        return pW1, pW2, cov_2d, cov_sym_2d, angles_
+        return pW1, pW2, cov_2d, cov_sym_2d, angles_, bell_values
+    
+    def plot_bell_hist(self, target_path="./plots/"):
+        for label, bell_values in zip(self.labels, self.bell_values):
+            plt.hist(bell_values, bins=50, alpha=0.5, label=label, density=True, range=[-30, 30])
+        plt.legend()
+        plt.savefig(os.path.join(target_path, "bell_hist.png"))
+        plt.close()
 
     def initialize_datasets(self):
         """
@@ -76,11 +84,12 @@ class calculate_results:
         self.pW1 = []
         self.pW2 = []
         self.angles_ = []
+        self.bell_values = []
 
         color_map = plt.get_cmap("Set1")
 
         for idx, (label, (array, t)) in enumerate(self.reconstructions.items()):
-            pW1_num, pW2_num, cov_2d, cov_sym_2d, angles = (
+            pW1_num, pW2_num, cov_2d, cov_sym_2d, angles, bell_values = (
                 self.calculate_gellmann_coefficients(array, t)
             )
             self.datasets.append(cov_2d)
@@ -89,6 +98,7 @@ class calculate_results:
             self.angles_.append(angles)
             self.labels.append(label)
             self.colors.append(color_map(idx))
+            self.bell_values.append(bell_values)
 
             # Concatenate array, type, pw1, pw2 and write to a csv file for each loop iteration
             # data = np.concatenate(
@@ -251,6 +261,7 @@ class calculate_results:
     def run(self, target_path):
         self.initialize_datasets()
         self.plot_gellmann_coefficients(target_path)
+        self.plot_bell_hist()
         # self.plot_gellmann_coefficients_hist(target_path)
         # self.plot_wigner_heatmap(target_path)
         # self.plot_wigner_heatmap_diff(target_path)
