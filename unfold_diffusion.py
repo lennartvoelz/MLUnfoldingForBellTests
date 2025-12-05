@@ -55,6 +55,9 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
     # Initialize data preprocessor
     data_preprocessor = DiffusionDataPreprocessor(config)
 
+    # Load normalization parameters fitted during training
+    data_preprocessor.load_normalization_params()
+
     # Prepare detector data
     lep1_4vec, lep2_4vec, missing_4vec = data_preprocessor.convert_to_four_vectors(
         detector_data
@@ -76,8 +79,8 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
         X = detector_features
         print("No moment conditioning - using only detector measurements")
 
-    # Normalize
-    X_norm, _ = data_preprocessor.normalize_data(X, np.zeros((X.shape[0], 8)))
+    # Normalize inputs using training-time statistics (do not touch targets)
+    X_norm = data_preprocessor.normalize_inputs(X)
     X_tensor = torch.from_numpy(X_norm).float().to(config.device)
 
     # Load trained model

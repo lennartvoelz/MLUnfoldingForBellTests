@@ -1,9 +1,3 @@
-# Unified Configuration for Diffusion Model Pipeline
-# This file serves as the single source of truth for all diffusion model scripts:
-# - preprocess_diffusion_data.py
-# - train_diffusion.py  
-# - unfold_diffusion.py
-
 # =============================================================================
 # DATA PATHS AND FILES
 # =============================================================================
@@ -25,13 +19,13 @@ data:
   preprocessing:
     detector_files:
       - "data/hww_1M_MG_final_detector_sim_cuts.csv"
-      - "data/ww_1M_MG_final_detector_sim_cuts.csv"
-      - "data/ttbar_1M_MG_final_detector_sim_cuts.csv"
+      # - "data/ww_1M_MG_final_detector_sim_cuts.csv"
+      # - "data/ttbar_1M_MG_final_detector_sim_cuts.csv"
       # - "data/hww_mangled_1M_MG_final_detector_sim_cuts.csv"
     truth_files:
       - "data/hww_1M_MG_final_truth_cuts.csv"
-      - "data/ww_1M_MG_final_truth_cuts.csv"
-      - "data/ttbar_1M_MG_final_truth_cuts.csv"
+      # - "data/ww_1M_MG_final_truth_cuts.csv"
+      # - "data/ttbar_1M_MG_final_truth_cuts.csv"
       # - "data/hww_mangled_1M_MG_final_truth_cuts.csv"
 
 # =============================================================================
@@ -41,14 +35,14 @@ data:
 data_processing:
   # Filtering parameters
   max_zero_columns: 2  # Remove rows with more than this many zero values
-  
+
   # Conditioning feature parameters
   pt_conditioning_moments: 3
   eta_conditioning_moments: 0
   phi_conditioning_moments: 0
-  mass_conditioning_moments: 2
-  px_conditioning_moments: 2
-  py_conditioning_moments: 2
+  mass_conditioning_moments: 0
+  px_conditioning_moments: 0
+  py_conditioning_moments: 0
   
   # Normalization ranges (in GeV)
   eta_range: 2.5
@@ -58,7 +52,13 @@ data_processing:
   
   # Data dimensions
   n_dims: 8  # 4 components for each of 2 neutrinos (E, px, py, pz)
-  
+
+  # Numerical stability parameters
+  epsilon: 1e-8
+
+  # Histogram/binning parameters
+  histogram_bins: 50  # Number of bins for mode calculation
+
   # Shuffling and sampling
   random_state: 42
   max_rows: null  # Set to integer to limit dataset size, null for no limit
@@ -73,9 +73,9 @@ model:
   output_dim: 8    # 2 neutrinos × 4 components each
   
   # Network architecture
-  hidden_dim: 256
-  num_layers: 4
-  time_dim: 32
+  hidden_dim: 512
+  num_layers: 8
+  time_dim: 128
   
   # Diffusion parameters
   beta_1: 1e-4
@@ -88,7 +88,7 @@ model:
 
 training:
   # Basic training parameters
-  epochs: 200
+  epochs: 500
   batch_size: 1024
   learning_rate: 3e-4
   
@@ -97,7 +97,7 @@ training:
   validation_split: 0.1
   
   # Checkpointing
-  save_interval: 10
+  save_interval: 50
   save_checkpoints: true
   
   # Training type identifier
@@ -109,8 +109,8 @@ training:
 
 unfolding:
   # Unfolding parameters
-  unfold_size: 200000  # Maximum number of events to unfold
-  sample_size: 10000   # Batch size for unfolding
+  unfold_size: 400000  # Maximum number of events to unfold
+  sample_size: 1024   # Batch size for unfolding
   
   # Unfolding type identifier
   unf_type: "lepqua_CT14lo"
@@ -131,9 +131,9 @@ system:
   device: "cuda"  # Will fallback to CPU if CUDA not available
   
   # Output paths
-  output_path: "./outputs/diffusion_case5/"
-  plots_path: "./plots/diffusion_case5/"
-  ckpt_path: "./model-state/diffusion_case5/"
+  output_path: "./outputs/diffusion_pt/"
+  plots_path: "./plots/diffusion_pt/"
+  ckpt_path: "./model-state/diffusion_pt"
   
   # Logging
   verbose: false

@@ -66,12 +66,21 @@ class calculate_results:
         print("Bell Value: ", bell)
 
         return pW1, pW2, cov_2d, cov_sym_2d, angles_, bell_values
-    
+
     def plot_bell_hist(self, target_path="./plots/"):
         for label, bell_values in zip(self.labels, self.bell_values):
-            plt.hist(bell_values, bins=50, alpha=0.5, label=label, density=True, range=[-30, 30])
+            plt.hist(
+                bell_values,
+                bins=50,
+                alpha=0.5,
+                label=label,
+                density=True,
+                range=[-30, 30],
+            )
         plt.legend()
-        plt.savefig(os.path.join(target_path, "bell_hist.png"))
+        plt.savefig(
+            os.path.join(target_path, f"bell_hist_{datetime.now():%Y%m%d_%H%M%S}.png")
+        )
         plt.close()
 
     def initialize_datasets(self):
@@ -100,49 +109,8 @@ class calculate_results:
             self.colors.append(color_map(idx))
             self.bell_values.append(bell_values)
 
-            # Concatenate array, type, pw1, pw2 and write to a csv file for each loop iteration
-            # data = np.concatenate(
-            #     (array, t.values.reshape(-1, 1), pW1_num, pW2_num), axis=1
-            # )
-            # df = pd.DataFrame(
-            #     data,
-            #     columns=[
-            #         "p_l_1_E_truth",
-            #         "p_l_1_x_truth",
-            #         "p_l_1_y_truth",
-            #         "p_l_1_z_truth",
-            #         "p_l_2_E_truth",
-            #         "p_l_2_x_truth",
-            #         "p_l_2_y_truth",
-            #         "p_l_2_z_truth",
-            #         "p_v_1_E_truth",
-            #         "p_v_1_x_truth",
-            #         "p_v_1_y_truth",
-            #         "p_v_1_z_truth",
-            #         "p_v_2_E_truth",
-            #         "p_v_2_x_truth",
-            #         "p_v_2_y_truth",
-            #         "p_v_2_z_truth",
-            #         "type",
-            #         "pWFirst1",
-            #         "pWFirst2",
-            #         "pWFirst3",
-            #         "pWFirst4",
-            #         "pWFirst5",
-            #         "pWFirst6",
-            #         "pWFirst7",
-            #         "pWFirst8",
-            #         "pWSecond1",
-            #         "pWSecond2",
-            #         "pWSecond3",
-            #         "pWSecond4",
-            #         "pWSecond5",
-            #         "pWSecond6",
-            #         "pWSecond7",
-            #         "pWSecond8",
-            #     ],
-            # )
-            # df.to_csv(f"{label}_data.csv", index=False)
+            # Write bell values to csv
+            # np.savetxt(f"bell_values_{label}.csv", bell_values, delimiter=",")
 
     def plot_gellmann_coefficients(self, target_path):
         """
@@ -299,8 +267,8 @@ class calculate_results_diff_analysis(calculate_results):
             self.angles_[1][:, 3], self.angles_[1][:, 1], bins=[cos_edges, phi_edges]
         )
 
-        print("Minimum count after cuts for W-:", H_Wminus_cuts.min())
-        print("Minimum count after cuts for W+:", H_Wplus_cuts.min())
+        # print("Minimum count after cuts for W-:", H_Wminus_cuts.min())
+        # print("Minimum count after cuts for W+:", H_Wplus_cuts.min())
 
         fig, axs = plt.subplots(2, 2, figsize=(20, 20))
         fig.suptitle(f"{self.title}", fontsize=30)
@@ -312,7 +280,7 @@ class calculate_results_diff_analysis(calculate_results):
             cmap="Blues",
             interpolation="nearest",
         )
-        axs[0, 0].set_title(r"$W^-$ before cuts", fontsize=20)
+        axs[0, 0].set_title(r"$W^-$ Truth", fontsize=20)
         axs[0, 1].imshow(
             H_Wplus,
             origin="lower",
@@ -321,7 +289,7 @@ class calculate_results_diff_analysis(calculate_results):
             cmap="Blues",
             interpolation="nearest",
         )
-        axs[0, 1].set_title(r"$W^+$ before cuts", fontsize=20)
+        axs[0, 1].set_title(r"$W^+$ Truth", fontsize=20)
         axs[1, 0].imshow(
             H_Wminus_cuts,
             origin="lower",
@@ -330,7 +298,7 @@ class calculate_results_diff_analysis(calculate_results):
             cmap="Blues",
             interpolation="nearest",
         )
-        axs[1, 0].set_title(r"$W^-$ after cuts", fontsize=20)
+        axs[1, 0].set_title(r"$W^-$ Diffusion", fontsize=20)
         axs[1, 1].imshow(
             H_Wplus_cuts,
             origin="lower",
@@ -339,41 +307,41 @@ class calculate_results_diff_analysis(calculate_results):
             cmap="Blues",
             interpolation="nearest",
         )
-        axs[1, 1].set_title(r"$W^+$ after cuts", fontsize=20)
+        axs[1, 1].set_title(r"$W^+$ Diffusion", fontsize=20)
         for ax in axs.flat:
             ax.set_xlabel(r"$\phi$", fontsize=20)
             ax.set_ylabel(r"$\cos(\theta)$", fontsize=20)
             ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
             ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
             ax.ticklabel_format(style="sci", axis="both", scilimits=(0, 0))
-        plt.colorbar(
-            axs[0, 0].images[0],
-            ax=axs[:, 0],
-            orientation="vertical",
-            fraction=0.02,
-            pad=0.04,
-        )
-        plt.colorbar(
-            axs[0, 1].images[0],
-            ax=axs[:, 1],
-            orientation="vertical",
-            fraction=0.02,
-            pad=0.04,
-        )
-        plt.colorbar(
-            axs[1, 0].images[0],
-            ax=axs[:, 0],
-            orientation="vertical",
-            fraction=0.02,
-            pad=0.04,
-        )
-        plt.colorbar(
-            axs[1, 1].images[0],
-            ax=axs[:, 1],
-            orientation="vertical",
-            fraction=0.02,
-            pad=0.04,
-        )
+        # plt.colorbar(
+        #     axs[0, 0].images[0],
+        #     ax=axs[:, 0],
+        #     orientation="vertical",
+        #     fraction=0.02,
+        #     pad=0.04,
+        # )
+        # plt.colorbar(
+        #     axs[0, 1].images[0],
+        #     ax=axs[:, 1],
+        #     orientation="vertical",
+        #     fraction=0.02,
+        #     pad=0.04,
+        # )
+        # plt.colorbar(
+        #     axs[1, 0].images[0],
+        #     ax=axs[:, 0],
+        #     orientation="vertical",
+        #     fraction=0.02,
+        #     pad=0.04,
+        # )
+        # plt.colorbar(
+        #     axs[1, 1].images[0],
+        #     ax=axs[:, 1],
+        #     orientation="vertical",
+        #     fraction=0.02,
+        #     pad=0.04,
+        # )
         plt.tight_layout(rect=[0.02, 0.02, 0.98, 0.95])
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         fname = f"2d_angle_hist_{stamp}.png".replace(" ", "_")
@@ -465,9 +433,9 @@ class calculate_results_diff_analysis(calculate_results):
 
             for sample, lbl, col, sign in (
                 (0, "truth  W⁻", "tab:blue", -1),
-                (1, "selected W⁻", "tab:cyan", -1),
+                (1, "diffusion W⁻", "tab:cyan", -1),
                 (0, "truth  W⁺", "tab:red", +1),
-                (1, "selected W⁺", "tab:orange", +1),
+                (1, "diffusion W⁺", "tab:orange", +1),
             ):
                 data = self.wignerP(k, sign, sample)
                 data = data[np.isfinite(data)]

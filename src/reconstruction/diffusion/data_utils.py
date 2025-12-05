@@ -10,14 +10,25 @@ def calculate_moments(values, n_moments=4, eps=1e-8):
     Calculate the first n moments of pT distributions.
 
     Parameters:
-        pt_values: Array of pT values
-        n_moments: Number of moments to calculate
+        values: Array of values
+        n_moments: Number of moments to calculate (0 = none, 1 = mean only, 2 = mean+std, etc.)
+        eps: Small value for numerical stability
 
     Returns:
-        Array of moment values
+        Array of moment values (empty array if n_moments=0)
     """
+    # Return empty array if no moments requested
+    if n_moments == 0:
+        return np.array([], dtype=np.float64)
+
     values = np.asarray(values, dtype=np.float64)
     mu = np.mean(values)
+
+    # Return just mean if n_moments=1
+    if n_moments == 1:
+        return np.array([mu], dtype=np.float64)
+
+    # Calculate std and higher moments
     xc = values - mu
     sigma = np.sqrt(np.mean(xc**2) + eps)
     outs = [mu, sigma]
@@ -39,6 +50,45 @@ def circ_moments(alpha, k_max=2):
     return np.array(out, dtype=np.float64)
 
 
+def calculate_total_transverse_mass(lep1_4vec, lep2_4vec, missing_4vec):
+    """
+    Calculate total transverse mass of the system as sum of individual transverse masses.
+
+    The total transverse mass is computed as:
+        m_T_total = m_T_lep1 + m_T_lep2 + m_T_missing
+
+    where each individual transverse mass is:
+        m_T_i = sqrt(E_i^2 - p_z_i^2)
+
+    Parameters:
+        lep1_4vec: Four-vector of first lepton [E, px, py, pz]
+        lep2_4vec: Four-vector of second lepton [E, px, py, pz]
+        missing_4vec: Four-vector of missing momentum [E, px, py, pz]
+
+    Returns:
+        Total transverse mass of the system (sum of individual transverse masses)
+    """
+    # Extract energy and pz components for each particle
+    E1, pz1 = lep1_4vec[:, 0], lep1_4vec[:, 3]
+    E2, pz2 = lep2_4vec[:, 0], lep2_4vec[:, 3]
+    E_miss, pz_miss = missing_4vec[:, 0], missing_4vec[:, 3]
+
+    # Calculate individual transverse masses: m_T_i = sqrt(E_i^2 - p_z_i^2)
+    mt_lep1_squared = E1**2 - pz1**2
+    mt_lep2_squared = E2**2 - pz2**2
+    mt_miss_squared = E_miss**2 - pz_miss**2
+
+    # Ensure non-negative values before taking square root
+    mt_lep1 = np.sqrt(np.maximum(mt_lep1_squared, 0.0))
+    mt_lep2 = np.sqrt(np.maximum(mt_lep2_squared, 0.0))
+    mt_miss = np.sqrt(np.maximum(mt_miss_squared, 0.0))
+
+    # Sum individual transverse masses
+    mt_total = mt_lep1 + mt_lep2 + mt_miss
+
+    return mt_total
+
+
 def calculate_mode(data, bins=50):
     """
     Calculate the mode of a distribution using histogram.
@@ -56,12 +106,14 @@ def calculate_mode(data, bins=50):
     return mode
 
 
-def calculate_kinematic_modes(four_vectors):
+def calculate_kinematic_modes(four_vectors, epsilon=1e-8, bins=50):
     """
     Calculate modes for kinematic variables from four-vectors.
 
     Parameters:
         four_vectors: Array of four-vectors [E, px, py, pz]
+        epsilon: Small value to prevent division by zero
+        bins: Number of bins for histogram
 
     Returns:
         Dictionary of mode values for different variables
@@ -75,19 +127,20 @@ def calculate_kinematic_modes(four_vectors):
     pt = np.sqrt(px**2 + py**2)
 
     modes = {
-        "E": calculate_mode(E),
-        "px": calculate_mode(px),
-        "py": calculate_mode(py),
-        "pz": calculate_mode(pz),
-        "pt": calculate_mode(pt),
+        "E": calculate_mode(E, bins=bins),
+        "px": calculate_mode(px, bins=bins),
+        "py": calculate_mode(py, bins=bins),
+        "pz": calculate_mode(pz, bins=bins),
+        "pt": calculate_mode(pt, bins=bins),
         "eta": calculate_mode(
             0.5
             * np.log(
                 (np.sqrt(px**2 + py**2 + pz**2) + pz)
-                / (np.sqrt(px**2 + py**2 + pz**2) - pz + 1e-8)
-            )
+                / (np.sqrt(px**2 + py**2 + pz**2) - pz + epsilon)
+            ),
+            bins=bins,
         ),
-        "phi": calculate_mode(np.arctan2(py, px)),
+        "phi": calculate_mode(np.arctan2(py, px), bins=bins),
     }
 
     return modes
@@ -158,13 +211,16 @@ class DiffusionDataPreprocessor:
         phi2 = np.arctan2(py2, px2)
         dphi = np.arctan2(np.sin(phi1 - phi2), np.cos(phi1 - phi2))
 
+        # Get epsilon from config with fallback
+        epsilon = getattr(self.config, "epsilon", 1e-8)
+
         eta1 = 0.5 * np.log(
             (np.sqrt(px1**2 + py1**2 + pz1**2) + pz1)
-            / (np.sqrt(px1**2 + py1**2 + pz1**2) - pz1 + 1e-8)
+            / (np.sqrt(px1**2 + py1**2 + pz1**2) - pz1 + epsilon)
         )
         eta2 = 0.5 * np.log(
             (np.sqrt(px2**2 + py2**2 + pz2**2) + pz2)
-            / (np.sqrt(px2**2 + py2**2 + pz2**2) - pz2 + 1e-8)
+            / (np.sqrt(px2**2 + py2**2 + pz2**2) - pz2 + epsilon)
         )
         deta = eta1 - eta2
         deta = (deta + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi)
@@ -172,9 +228,33 @@ class DiffusionDataPreprocessor:
         eta_features = circ_moments(deta, self.config.eta_conditioning_moments)
         phi_features = circ_moments(dphi, self.config.phi_conditioning_moments)
 
-        conditioning_features = np.concatenate(
-            [pt_1_moments, pt_2_moments, eta_features, phi_features], axis=0
-        )
+        # Start with existing features
+        feature_list = [pt_1_moments, pt_2_moments, eta_features, phi_features]
+
+        # Add optional m_t conditioning moments if enabled
+        mt_moments_count = getattr(self.config, "mt_conditioning_moments", 0)
+        if mt_moments_count > 0:
+            mt_total = calculate_total_transverse_mass(
+                lep1_4vec, lep2_4vec, missing_4vec
+            )
+            mt_moments = calculate_moments(mt_total, mt_moments_count)
+            feature_list.append(mt_moments)
+
+        # Add optional px conditioning moments if enabled
+        px_moments_count = getattr(self.config, "px_conditioning_moments", 0)
+        if px_moments_count > 0:
+            px_1_moments = calculate_moments(px1, px_moments_count)
+            px_2_moments = calculate_moments(px2, px_moments_count)
+            feature_list.extend([px_1_moments, px_2_moments])
+
+        # Add optional py conditioning moments if enabled
+        py_moments_count = getattr(self.config, "py_conditioning_moments", 0)
+        if py_moments_count > 0:
+            py_1_moments = calculate_moments(py1, py_moments_count)
+            py_2_moments = calculate_moments(py2, py_moments_count)
+            feature_list.extend([py_1_moments, py_2_moments])
+
+        conditioning_features = np.concatenate(feature_list, axis=0)
 
         conditioning_features = np.repeat(
             conditioning_features[np.newaxis, :], lep1_4vec.shape[0], axis=0
@@ -321,13 +401,16 @@ def compute_conditioning_features_for_file(df, config):
     phi2 = np.arctan2(py2, px2)
     dphi = np.arctan2(np.sin(phi1 - phi2), np.cos(phi1 - phi2))
 
+    # Get epsilon from config with fallback
+    epsilon = getattr(config, "epsilon", 1e-8)
+
     eta1 = 0.5 * np.log(
         (np.sqrt(px1**2 + py1**2 + pz1**2) + pz1)
-        / (np.sqrt(px1**2 + py1**2 + pz1**2) - pz1 + 1e-8)
+        / (np.sqrt(px1**2 + py1**2 + pz1**2) - pz1 + epsilon)
     )
     eta2 = 0.5 * np.log(
         (np.sqrt(px2**2 + py2**2 + pz2**2) + pz2)
-        / (np.sqrt(px2**2 + py2**2 + pz2**2) - pz2 + 1e-8)
+        / (np.sqrt(px2**2 + py2**2 + pz2**2) - pz2 + epsilon)
     )
     deta = eta1 - eta2
     deta = (deta + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi)
@@ -352,6 +435,14 @@ def compute_conditioning_features_for_file(df, config):
 
     for i, val in enumerate(phi_features):
         conditioning_dict[f"phi_moment_{i}"] = val
+
+    # Add optional m_t conditioning moments if enabled
+    mt_moments_count = getattr(config, "mt_conditioning_moments", 0)
+    if mt_moments_count > 0:
+        mt_total = calculate_total_transverse_mass(lep1_4vec, lep2_4vec, missing_4vec)
+        mt_moments = calculate_moments(mt_total, mt_moments_count)
+        for i, value in enumerate(mt_moments):
+            conditioning_dict[f"mom_mt_{i}"] = value
 
     return conditioning_dict
 
@@ -445,6 +536,10 @@ class PrecomputedDiffusionDataLoader:
         ]
         conditioning_cols.extend(angle_cols)
 
+        # Find optional m_t conditioning moment columns
+        mt_cols = [col for col in self.data.columns if col.startswith("mom_mt_")]
+        conditioning_cols.extend(sorted(mt_cols))
+
         self.conditioning_columns = conditioning_cols
         print(f"Identified {len(conditioning_cols)} conditioning columns")
 
@@ -529,30 +624,5 @@ class PrecomputedDiffusionDataLoader:
 
         return lep1_4vec, lep2_4vec, missing_4vec
 
-    def normalize_data(self, X, y):
-        """
-        Normalize data using configuration ranges.
-        """
-        # Normalize detector-level four-vectors (first 12 components of X)
-        detector_norm = np.tile(
-            [
-                self.config.E_range,
-                self.config.pT_range,
-                self.config.pT_range,
-                self.config.pT_range,
-            ],
-            3,
-        )
-
-        X_normalized = X.copy()
-        X_normalized[:, :12] = X[:, :12] / detector_norm
-
-        # Normalize precomputed conditioning features
-        # The conditioning features are already computed, just copy them
-        # (they should be normalized appropriately during preprocessing)
-        X_normalized[:, 12:] = X[:, 12:]
-
-        # Normalize targets
-        y_normalized = y / self.config.norm_vec
-
-        return X_normalized, y_normalized
+    # NOTE: Legacy helper kept for reference only; all callers should use the
+    # main normalize_data method defined above.

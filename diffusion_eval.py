@@ -1,11 +1,13 @@
-from src.evaluation.evaluation import calculate_results
+from src.evaluation.evaluation import calculate_results, calculate_results_diff_analysis
 import numpy as np
 import pandas as pd
 
-data_neutrino = pd.read_csv("outputs/diffusion_case5/unfold_diffusion_lepqua_CT14lo.csv")
+data_neutrino = pd.read_csv(
+    "outputs/diffusion_pt/unfold_diffusion_lepqua_CT14lo.csv"
+)
 data_leptons = pd.read_csv("data/hww_sherpa_1M_MG_final_truth_cuts.csv")
 
-data = pd.concat([data_leptons, data_neutrino], axis=1)
+data = pd.concat([data_neutrino, data_leptons], axis=1)
 
 X = data[
     [
@@ -59,4 +61,12 @@ result = calculate_results(
     types=[types, types],
 )
 
-result.run("plots")
+result_ = calculate_results_diff_analysis(
+    arrays=[final_truth, final_unfolded_ww_tt_hwwMG],
+    labels=["Truth", "Diffusion"],
+    title="HWW",
+    types=[types, types],
+)
+
+result.run("plots/analysis")
+result_.run("plots/analysis")

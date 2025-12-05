@@ -20,15 +20,74 @@ from reconstruction.diffusion.unified_config import load_unified_config
 
 
 def calculate_moments(values, n_moments=4, eps=1e-8):
-    """Calculate the first n moments of pT distributions."""
+    """
+    Calculate the first n moments of distributions.
+
+    Parameters:
+        values: Array of values
+        n_moments: Number of moments to calculate (0 = none, 1 = mean only, 2 = mean+std, etc.)
+        eps: Small value for numerical stability
+
+    Returns:
+        Array of moment values (empty array if n_moments=0)
+    """
+    # Return empty array if no moments requested
+    if n_moments == 0:
+        return np.array([], dtype=np.float64)
+
     values = np.asarray(values, dtype=np.float64)
     mu = np.mean(values)
+
+    # Return just mean if n_moments=1
+    if n_moments == 1:
+        return np.array([mu], dtype=np.float64)
+
+    # Calculate std and higher moments
     xc = values - mu
     sigma = np.sqrt(np.mean(xc**2) + eps)
     outs = [mu, sigma]
     for i in range(2, n_moments):
         outs += [np.mean(xc / (sigma + eps)) ** i]
     return np.array(outs, dtype=np.float64)
+
+
+def calculate_total_transverse_mass(lep1_4vec, lep2_4vec, missing_4vec):
+    """
+    Calculate total transverse mass of the system as sum of individual transverse masses.
+
+    The total transverse mass is computed as:
+        m_T_total = m_T_lep1 + m_T_lep2 + m_T_missing
+
+    where each individual transverse mass is:
+        m_T_i = sqrt(E_i^2 - p_z_i^2)
+
+    Parameters:
+        lep1_4vec: Four-vector of first lepton [E, px, py, pz]
+        lep2_4vec: Four-vector of second lepton [E, px, py, pz]
+        missing_4vec: Four-vector of missing momentum [E, px, py, pz]
+
+    Returns:
+        Total transverse mass of the system (sum of individual transverse masses)
+    """
+    # Extract energy and pz components for each particle
+    E1, pz1 = lep1_4vec[:, 0], lep1_4vec[:, 3]
+    E2, pz2 = lep2_4vec[:, 0], lep2_4vec[:, 3]
+    E_miss, pz_miss = missing_4vec[:, 0], missing_4vec[:, 3]
+
+    # Calculate individual transverse masses: m_T_i = sqrt(E_i^2 - p_z_i^2)
+    mt_lep1_squared = E1**2 - pz1**2
+    mt_lep2_squared = E2**2 - pz2**2
+    mt_miss_squared = E_miss**2 - pz_miss**2
+
+    # Ensure non-negative values before taking square root
+    mt_lep1 = np.sqrt(np.maximum(mt_lep1_squared, 0.0))
+    mt_lep2 = np.sqrt(np.maximum(mt_lep2_squared, 0.0))
+    mt_miss = np.sqrt(np.maximum(mt_miss_squared, 0.0))
+
+    # Sum individual transverse masses
+    mt_total = mt_lep1 + mt_lep2 + mt_miss
+
+    return mt_total
 
 
 def circ_moments(alpha, k_max=2):
@@ -85,13 +144,16 @@ def compute_conditioning_features_for_file(df, config):
     phi2 = np.arctan2(py2, px2)
     dphi = np.arctan2(np.sin(phi1 - phi2), np.cos(phi1 - phi2))
 
+    # Get epsilon from config with fallback
+    epsilon = getattr(config, "epsilon", 1e-8)
+
     eta1 = 0.5 * np.log(
         (np.sqrt(px1**2 + py1**2 + pz1**2) + pz1)
-        / (np.sqrt(px1**2 + py1**2 + pz1**2) - pz1 + 1e-8)
+        / (np.sqrt(px1**2 + py1**2 + pz1**2) - pz1 + epsilon)
     )
     eta2 = 0.5 * np.log(
         (np.sqrt(px2**2 + py2**2 + pz2**2) + pz2)
-        / (np.sqrt(px2**2 + py2**2 + pz2**2) - pz2 + 1e-8)
+        / (np.sqrt(px2**2 + py2**2 + pz2**2) - pz2 + epsilon)
     )
     deta = eta1 - eta2
     deta = (deta + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi)
@@ -116,6 +178,34 @@ def compute_conditioning_features_for_file(df, config):
 
     for i, val in enumerate(phi_features):
         conditioning_dict[f"phi_moment_{i}"] = val
+
+    # Add optional m_t conditioning moments if enabled
+    mt_moments_count = getattr(config, "mt_conditioning_moments", 0)
+    if mt_moments_count > 0:
+        mt_total = calculate_total_transverse_mass(lep1_4vec, lep2_4vec, missing_4vec)
+        mt_moments = calculate_moments(mt_total, mt_moments_count)
+        for i, value in enumerate(mt_moments):
+            conditioning_dict[f"mom_mt_{i}"] = value
+
+    # Add optional px conditioning moments if enabled
+    px_moments_count = getattr(config, "px_conditioning_moments", 0)
+    if px_moments_count > 0:
+        px_1_moments = calculate_moments(px1, px_moments_count)
+        px_2_moments = calculate_moments(px2, px_moments_count)
+        for i, value in enumerate(px_1_moments):
+            conditioning_dict[f"mom_px_lep1_{i}"] = value
+        for i, value in enumerate(px_2_moments):
+            conditioning_dict[f"mom_px_lep2_{i}"] = value
+
+    # Add optional py conditioning moments if enabled
+    py_moments_count = getattr(config, "py_conditioning_moments", 0)
+    if py_moments_count > 0:
+        py_1_moments = calculate_moments(py1, py_moments_count)
+        py_2_moments = calculate_moments(py2, py_moments_count)
+        for i, value in enumerate(py_1_moments):
+            conditioning_dict[f"mom_py_lep1_{i}"] = value
+        for i, value in enumerate(py_2_moments):
+            conditioning_dict[f"mom_py_lep2_{i}"] = value
 
     return conditioning_dict
 

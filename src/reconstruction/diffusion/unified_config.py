@@ -95,6 +95,17 @@ class UnifiedDiffusionConfig:
                     * self.data_processing["eta_conditioning_moments"]  # eta moments
                     + 2
                     * self.data_processing["phi_conditioning_moments"]  # phi moments
+                    + self.data_processing.get(
+                        "mt_conditioning_moments", 0
+                    )  # m_t moments
+                    + 2
+                    * self.data_processing.get(
+                        "px_conditioning_moments", 0
+                    )  # px moments
+                    + 2
+                    * self.data_processing.get(
+                        "py_conditioning_moments", 0
+                    )  # py moments
                 )
             else:
                 conditioning_dim = (
@@ -135,8 +146,18 @@ class UnifiedDiffusionConfig:
         pt_moments = self.data_processing.get("pt_conditioning_moments", 0)
         eta_moments = self.data_processing.get("eta_conditioning_moments", 0)
         phi_moments = self.data_processing.get("phi_conditioning_moments", 0)
+        mt_moments = self.data_processing.get("mt_conditioning_moments", 0)
+        px_moments = self.data_processing.get("px_conditioning_moments", 0)
+        py_moments = self.data_processing.get("py_conditioning_moments", 0)
 
-        return pt_moments > 0 or eta_moments > 0 or phi_moments > 0
+        return (
+            pt_moments > 0
+            or eta_moments > 0
+            or phi_moments > 0
+            or mt_moments > 0
+            or px_moments > 0
+            or py_moments > 0
+        )
 
     def _get_device(self):
         """Determine the appropriate device (CUDA/CPU)."""
@@ -275,6 +296,31 @@ class UnifiedDiffusionConfig:
     def moment_conditioning_enabled(self):
         """Return whether moment conditioning is enabled."""
         return self._moment_conditioning_enabled
+
+    @property
+    def n_dims(self):
+        """Number of output dimensions (neutrino four-vectors)."""
+        return int(self.data_processing.get("n_dims", 8))
+
+    @property
+    def shape_in(self):
+        """Input shape tuple for backward compatibility."""
+        return (self.input_dim,)
+
+    @property
+    def shape_out(self):
+        """Output shape tuple for backward compatibility."""
+        return (self.output_dim,)
+
+    @property
+    def save_ckpts(self):
+        """Whether to save checkpoints during training."""
+        return bool(self.training.get("save_checkpoints", True))
+
+    @property
+    def load_preprocessed_training_data(self):
+        """Whether to load preprocessed training data."""
+        return bool(self.compatibility.get("load_preprocessed_training_data", True))
 
     # =============================================================================
     # UTILITY METHODS

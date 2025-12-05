@@ -10,7 +10,7 @@ from src.utils.lorentz_vector import LorentzVector
 from src.reconstruction.diffusion import (
     DiffusionProcess,
     Model,
-    DiffusionConfig,
+    UnifiedDiffusionConfig,
     DiffusionDataPreprocessor,
 )
 from src.utils.mode_calculation import KinematicModeCalculator
@@ -22,16 +22,21 @@ class DiffusionReconstruction:
     Integrates with the existing reconstruction framework.
     """
 
-    def __init__(self, config_dict=None, model_path=None):
+    def __init__(
+        self, config_dict=None, model_path=None, config_path="diffusion_config.yaml"
+    ):
         """
         Initialize diffusion reconstruction.
 
         Parameters:
-            config_dict: Configuration dictionary (optional)
+            config_dict: Configuration dictionary (optional, for backward compatibility)
             model_path: Path to trained model checkpoint
+            config_path: Path to YAML configuration file (default: diffusion_config.yaml)
         """
-        # Initialize configuration
-        self.config = DiffusionConfig()
+        # Initialize configuration from YAML
+        self.config = UnifiedDiffusionConfig(config_path)
+
+        # Apply any overrides from config_dict (for backward compatibility)
         if config_dict:
             self._update_config(config_dict)
 
@@ -50,10 +55,40 @@ class DiffusionReconstruction:
             self.load_model(model_path)
 
     def _update_config(self, config_dict):
-        """Update configuration with provided dictionary."""
+        """
+        Update configuration with provided dictionary.
+
+        For backward compatibility, this method maps old-style config keys
+        to the new YAML-based structure.
+        """
+        # Map old config keys to new structure
+        key_mapping = {
+            "seed": ("system", "seed"),
+            "random_seed": ("system", "random_seed"),
+            "batch_size": ("training", "batch_size"),
+            "epochs": ("training", "epochs"),
+            "lr": ("training", "learning_rate"),
+            "beta_1": ("model", "beta_1"),
+            "beta_T": ("model", "beta_T"),
+            "T": ("model", "T"),
+            "output_path": ("system", "output_path"),
+            "plots_path": ("system", "plots_path"),
+            "ckpt_path": ("system", "ckpt_path"),
+        }
+
         for key, value in config_dict.items():
-            if hasattr(self.config, key):
-                setattr(self.config, key, value)
+            if key in key_mapping:
+                section, param = key_mapping[key]
+                if section in self.config.config:
+                    self.config.config[section][param] = value
+            # Also try direct property access for backward compatibility
+            elif hasattr(self.config, key):
+                # For properties that map to config sections
+                try:
+                    setattr(self.config, key, value)
+                except AttributeError:
+                    # Property is read-only, skip
+                    pass
 
     def initialize_model(self):
         """Initialize the diffusion model and process."""
@@ -138,13 +173,19 @@ class DiffusionReconstruction:
         )
 
         # Combine detector features with conditioning
-        detector_features = np.concatenate([lep1_4vec, lep2_4vec, missing_4vec], axis=1)
+        detector_features = np.concatenate(
+            [lep1_4vec, lep2_4vec, missing_4vec], axis=1
+        )
         X = np.concatenate([detector_features, conditioning_features], axis=1)
 
-        # Normalize
-        X_normalized, _ = self.data_preprocessor.normalize_data(
-            X, np.zeros((X.shape[0], 8))
-        )
+        # Ensure normalization parameters are available (load if needed)
+        if not hasattr(self.data_preprocessor, "detector_mean") or getattr(
+            self.data_preprocessor, "detector_mean"
+        ) is None:
+            self.data_preprocessor.load_normalization_params()
+
+        # Normalize inputs using training-time statistics
+        X_normalized = self.data_preprocessor.normalize_inputs(X)
 
         return torch.from_numpy(X_normalized).float().to(self.config.device)
 

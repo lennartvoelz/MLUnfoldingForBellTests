@@ -104,7 +104,9 @@ def prepare_diffusion_data(detector_data, truth_data, diffusion_config):
     conditioning_columns = [
         col
         for col in detector_data.columns
-        if col.startswith(("mom_pT_", "eta_moment_", "phi_moment_"))
+        if col.startswith(
+            ("mom_pT_", "eta_moment_", "phi_moment_", "mom_mt_", "mom_px_", "mom_py_")
+        )
     ]
 
     if conditioning_columns:
@@ -185,7 +187,7 @@ def prepare_diffusion_data(detector_data, truth_data, diffusion_config):
         # Use original preprocessing method
         X, y = diff_preprocessor.prepare_training_data(detector_data, truth_data)
 
-    # Normalize data
+    # Normalize data (fit stats on the full training set once)
     X_norm, y_norm = diff_preprocessor.normalize_data(X, y)
 
     return X_norm, y_norm
