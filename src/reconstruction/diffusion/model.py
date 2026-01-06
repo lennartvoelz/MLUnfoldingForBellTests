@@ -39,7 +39,6 @@ class DiffusionModel(nn.Module):
         self.output_dim = output_dim
         self.time_dim = time_dim
 
-        # Time embedding
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(time_dim),
             nn.Linear(time_dim, time_dim),
@@ -47,17 +46,14 @@ class DiffusionModel(nn.Module):
             nn.Linear(time_dim, time_dim),
         )
 
-        # Input projection
         self.input_proj = nn.Linear(output_dim, hidden_dim)
 
-        # Conditioning projection (handle case where input_dim might be 0)
         self.has_conditioning = input_dim > 0
         if self.has_conditioning:
             self.cond_proj = nn.Linear(input_dim, hidden_dim)
         else:
             self.cond_proj = None
 
-        # Main network
         layers = []
         layers += [
             nn.Linear(hidden_dim + time_dim, hidden_dim),
@@ -68,8 +64,6 @@ class DiffusionModel(nn.Module):
             layers += [nn.Linear(hidden_dim, hidden_dim), nn.ReLU(), nn.Dropout(0.1)]
 
         self.main_net = nn.Sequential(*layers)
-
-        # Output projection
         self.output_proj = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x, cond, t, train=True):
@@ -85,29 +79,22 @@ class DiffusionModel(nn.Module):
         Returns:
             Predicted noise
         """
-        # Time embedding
         if isinstance(t, int):
             t = torch.tensor([t] * x.shape[0], device=x.device)
         time_emb = self.time_mlp(t.float())
 
-        # Project inputs
         x_proj = self.input_proj(x)
 
-        # Handle conditioning data (might be empty if moment conditioning disabled)
         if self.has_conditioning and cond.shape[-1] > 0:
             cond_proj = self.cond_proj(cond)
             h = x_proj + cond_proj
         else:
-            # No conditioning - use only x projection
             h = x_proj
 
-        # Add time embedding and pass through main network
         h = torch.cat([h, time_emb], dim=-1)
         h = self.main_net(h)
 
-        # Output projection
         noise_pred = self.output_proj(h)
-
         return noise_pred
 
 
@@ -131,12 +118,10 @@ class Model(nn.Module):
         self.beta_T = beta_T
         self.T = T
 
-        # Create diffusion schedule
         self.betas = torch.linspace(beta_1, beta_T, T).to(device)
         self.alphas = 1 - self.betas
         self.alpha_bars = torch.cumprod(self.alphas, dim=0)
 
-        # Neural network
         self.model = DiffusionModel(input_dim, output_dim).to(device)
 
     def forward(self, x, cond, t, train=True):
@@ -156,20 +141,15 @@ class Model(nn.Module):
         """
         batch_size = x_0.shape[0]
 
-        # Sample random timesteps
         t = torch.randint(0, self.T, (batch_size,), device=self.device)
 
-        # Add noise to clean data
         noise = torch.randn_like(x_0)
         sqrt_alpha_bar = torch.sqrt(self.alpha_bars[t]).unsqueeze(-1)
         sqrt_one_minus_alpha_bar = torch.sqrt(1 - self.alpha_bars[t]).unsqueeze(-1)
 
         x_t = sqrt_alpha_bar * x_0 + sqrt_one_minus_alpha_bar * noise
 
-        # Predict noise
         noise_pred = self.model(x_t, cond, t, train=True)
 
-        # Calculate loss
         loss = nn.MSELoss()(noise_pred, noise)
-
         return loss

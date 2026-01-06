@@ -8,10 +8,13 @@ train_diffusion.py, and unfold_diffusion.py.
 """
 
 import os
+import logging
 import yaml
 import numpy as np
 from pathlib import Path
 from typing import Dict, Any, Optional, List
+
+logger = logging.getLogger(__name__)
 
 # Optional torch import for preprocessing-only usage
 try:
@@ -85,32 +88,40 @@ class UnifiedDiffusionConfig:
         # Check if moment conditioning is enabled
         self._moment_conditioning_enabled = self._is_moment_conditioning_enabled()
 
+        # Work out conditioning dimensionality from moment configuration
+        detector_4vec_dim = 12  # 3 particles × 4 components each
+        if self._moment_conditioning_enabled:
+            pt_moments = int(self.data_processing.get("pt_conditioning_moments", 0))
+            eta_moments = int(
+                self.data_processing.get("eta_conditioning_moments", 0)
+            )
+            phi_moments = int(
+                self.data_processing.get("phi_conditioning_moments", 0)
+            )
+            # Allow both "mt_conditioning_moments" and legacy
+            # "mass_conditioning_moments" keys.
+            mt_moments = int(
+                self.data_processing.get(
+                    "mt_conditioning_moments",
+                    self.data_processing.get("mass_conditioning_moments", 0),
+                )
+            )
+            px_moments = int(self.data_processing.get("px_conditioning_moments", 0))
+            py_moments = int(self.data_processing.get("py_conditioning_moments", 0))
+
+            conditioning_dim = (
+                2 * pt_moments
+                + 2 * eta_moments
+                + 2 * phi_moments
+                + mt_moments
+                + 2 * px_moments
+                + 2 * py_moments
+            )
+        else:
+            conditioning_dim = 0  # No conditioning features when all moments are zero
+
         # Calculate input dimension if not specified
         if self.model.get("input_dim") is None:
-            detector_4vec_dim = 12  # 3 particles × 4 components each
-            if self._moment_conditioning_enabled:
-                conditioning_dim = (
-                    2 * self.data_processing["pt_conditioning_moments"]  # 2 leptons
-                    + 2
-                    * self.data_processing["eta_conditioning_moments"]  # eta moments
-                    + 2
-                    * self.data_processing["phi_conditioning_moments"]  # phi moments
-                    + self.data_processing.get(
-                        "mt_conditioning_moments", 0
-                    )  # m_t moments
-                    + 2
-                    * self.data_processing.get(
-                        "px_conditioning_moments", 0
-                    )  # px moments
-                    + 2
-                    * self.data_processing.get(
-                        "py_conditioning_moments", 0
-                    )  # py moments
-                )
-            else:
-                conditioning_dim = (
-                    0  # No conditioning features when all moments are zero
-                )
             self.model["input_dim"] = detector_4vec_dim + conditioning_dim
 
         # Set up device
@@ -132,6 +143,15 @@ class UnifiedDiffusionConfig:
                 self.data_processing["pT_range"],  # neutrino 2
             ]
         )
+
+        # Optionally expand output dimension when predicting conditioning features
+        base_output_dim = int(self.data_processing.get("n_dims", 8))
+        if self.data_processing.get("predict_conditioning_features", False):
+            self.model["output_dim"] = base_output_dim + conditioning_dim
+        else:
+            # Preserve existing setting, or fall back to base_output_dim
+            if self.model.get("output_dim") is None:
+                self.model["output_dim"] = base_output_dim
 
         # Set up paths
         self._setup_paths()
@@ -201,6 +221,15 @@ class UnifiedDiffusionConfig:
         return float(self.training["learning_rate"])
 
     @property
+    def weight_decay(self):
+        """L2 regularization strength for optimizer (Adam weight_decay).
+
+        Defaults to 0.0 when not specified in the training section.
+        """
+
+        return float(self.training.get("weight_decay", 0.0))
+
+    @property
     def beta_1(self):
         return float(self.model["beta_1"])
 
@@ -245,6 +274,24 @@ class UnifiedDiffusionConfig:
         return int(self.data_processing["phi_conditioning_moments"])
 
     @property
+    def mt_conditioning_moments(self):
+        # Support both new and legacy config keys
+        return int(
+            self.data_processing.get(
+                "mt_conditioning_moments",
+                self.data_processing.get("mass_conditioning_moments", 0),
+            )
+        )
+
+    @property
+    def px_conditioning_moments(self):
+        return int(self.data_processing.get("px_conditioning_moments", 0))
+
+    @property
+    def py_conditioning_moments(self):
+        return int(self.data_processing.get("py_conditioning_moments", 0))
+
+    @property
     def pT_range(self):
         return float(self.data_processing["pT_range"])
 
@@ -277,6 +324,24 @@ class UnifiedDiffusionConfig:
         return int(self.training.get("save_interval", 100))
 
     @property
+    def early_stopping_patience(self):
+        """Patience (in epochs) for validation-based early stopping.
+
+        A value <= 0 disables early stopping.
+        """
+
+        value = self.training.get("early_stopping_patience", 0)
+        if value is None:
+            return 0
+        return int(value)
+
+    @property
+    def early_stopping_restore_best(self):
+        """Whether to restore the best model weights when stopping early."""
+
+        return bool(self.training.get("early_stopping_restore_best", True))
+
+    @property
     def train_type(self):
         return str(self.training["train_type"])
 
@@ -301,6 +366,11 @@ class UnifiedDiffusionConfig:
     def n_dims(self):
         """Number of output dimensions (neutrino four-vectors)."""
         return int(self.data_processing.get("n_dims", 8))
+
+    @property
+    def predict_conditioning_features(self):
+        """Whether the model should also predict conditioning features."""
+        return bool(self.data_processing.get("predict_conditioning_features", False))
 
     @property
     def shape_in(self):
@@ -366,6 +436,7 @@ class UnifiedDiffusionConfig:
             "pt_conditioning_moments": self.pt_conditioning_moments,
             "eta_conditioning_moments": self.eta_conditioning_moments,
             "phi_conditioning_moments": self.phi_conditioning_moments,
+            "mt_conditioning_moments": self.mt_conditioning_moments,
             "moment_conditioning_enabled": self.moment_conditioning_enabled,
             "pT_range": self.pT_range,
             "E_range": self.E_range,
@@ -383,8 +454,16 @@ class UnifiedDiffusionConfig:
                 "detector_files", []
             ),
             "truth_files": self.data.get("preprocessing", {}).get("truth_files", []),
+            "validation_detector_files": self.data.get("preprocessing", {}).get(
+                "validation_detector_files", []
+            ),
+            "validation_truth_files": self.data.get("preprocessing", {}).get(
+                "validation_truth_files", []
+            ),
             "detector_dataset_path": self.data.get("detector_dataset_path"),
             "truth_dataset_path": self.data.get("truth_dataset_path"),
+            "detector_val_dataset_path": self.data.get("detector_val_dataset_path"),
+            "truth_val_dataset_path": self.data.get("truth_val_dataset_path"),
             "detector_sim_path": self.data.get("detector_sim_path"),
             "truth_path": self.data.get("truth_path"),
             "data_path": self.data.get("data_path"),
@@ -393,30 +472,28 @@ class UnifiedDiffusionConfig:
 
     def print_summary(self):
         """Print a summary of the configuration."""
-        print("=" * 60)
-        print("UNIFIED DIFFUSION CONFIGURATION SUMMARY")
-        print("=" * 60)
-        print(f"Configuration file: {self.config_path}")
-        print(f"Device: {self.device}")
-        print(f"State name: {self.state_name}")
-        print()
-        print("Model Architecture:")
-        print(f"  Input dim: {self.input_dim}")
-        print(f"  Output dim: {self.output_dim}")
-        print(f"  Hidden dim: {self.hidden_dim}")
-        print(f"  Layers: {self.num_layers}")
-        print()
-        print("Training Parameters:")
-        print(f"  Epochs: {self.epochs}")
-        print(f"  Batch size: {self.batch_size}")
-        print(f"  Learning rate: {self.lr}")
-        print()
-        print("Data Processing:")
-        print(f"  Moment conditioning enabled: {self.moment_conditioning_enabled}")
-        print(f"  pT moments: {self.pt_conditioning_moments}")
-        print(f"  Eta moments: {self.eta_conditioning_moments}")
-        print(f"  Phi moments: {self.phi_conditioning_moments}")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("UNIFIED DIFFUSION CONFIGURATION SUMMARY")
+        logger.info("=" * 60)
+        logger.info(f"Configuration file: {self.config_path}")
+        logger.info(f"Device: {self.device}")
+        logger.info(f"State name: {self.state_name}")
+        logger.info("Model Architecture:")
+        logger.info(f"  Input dim: {self.input_dim}")
+        logger.info(f"  Output dim: {self.output_dim}")
+        logger.info(f"  Hidden dim: {self.hidden_dim}")
+        logger.info(f"  Layers: {self.num_layers}")
+        logger.info("Training Parameters:")
+        logger.info(f"  Epochs: {self.epochs}")
+        logger.info(f"  Batch size: {self.batch_size}")
+        logger.info(f"  Learning rate: {self.lr}")
+        logger.info("Data Processing:")
+        logger.info(f"  Moment conditioning enabled: {self.moment_conditioning_enabled}")
+        logger.info(f"  pT moments: {self.pt_conditioning_moments}")
+        logger.info(f"  Eta moments: {self.eta_conditioning_moments}")
+        logger.info(f"  Phi moments: {self.phi_conditioning_moments}")
+        logger.info(f"  mT moments: {self.mt_conditioning_moments}")
+        logger.info("=" * 60)
 
 
 def load_unified_config(

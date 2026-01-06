@@ -1,6 +1,7 @@
 import torch
 import tqdm
 import os
+import logging
 import numpy as np
 import pandas as pd
 
@@ -12,53 +13,40 @@ from src.reconstruction.diffusion import (
 from src.reconstruction.diffusion.unified_config import load_unified_config
 from src.data_preproc.preprocessing import DataPreprocessor
 
+logger = logging.getLogger(__name__)
+
 
 def load_test_data(config):
     """Load test data for unfolding."""
-    print("Loading test data...")
-
-    # Get file paths from unified config
     file_paths = config.get_file_paths()
     detector_sim_path = file_paths.get("detector_sim_path")
 
     if not detector_sim_path:
         raise ValueError("detector_sim_path not found in configuration")
 
-    # Load detector simulation data for unfolding
     detector_data = pd.read_csv(detector_sim_path + "_cuts.csv")
-
     return detector_data
 
 
 def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
     """Unfold events using trained diffusion model."""
 
-    # Load unified configuration
     config = load_unified_config(config_path)
-
-    # Set seed
     config.set_seed()
 
-    print("DIFFUSION MODEL UNFOLDING")
-    print("Using unified configuration system")
+    logger.info("Starting diffusion model unfolding")
     config.print_summary()
 
-    # Load test data
     detector_data = load_test_data(config)
 
-    # Limit data size for unfolding
     if len(detector_data) > config.unfold_size:
         detector_data = detector_data.head(config.unfold_size)
 
-    print(f"Unfolding {len(detector_data)} events")
+    logger.info(f"Unfolding {len(detector_data)} events")
 
-    # Initialize data preprocessor
     data_preprocessor = DiffusionDataPreprocessor(config)
-
-    # Load normalization parameters fitted during training
     data_preprocessor.load_normalization_params()
 
-    # Prepare detector data
     lep1_4vec, lep2_4vec, missing_4vec = data_preprocessor.convert_to_four_vectors(
         detector_data
     )
@@ -66,34 +54,24 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
         lep1_4vec, lep2_4vec, missing_4vec
     )
 
-    # Combine features
     detector_features = np.concatenate([lep1_4vec, lep2_4vec, missing_4vec], axis=1)
 
-    # Handle conditioning features (might be empty if moment conditioning disabled)
     if config.moment_conditioning_enabled and conditioning_features.shape[1] > 0:
         X = np.concatenate([detector_features, conditioning_features], axis=1)
-        print(
-            f"Using moment conditioning with {conditioning_features.shape[1]} features"
-        )
     else:
         X = detector_features
-        print("No moment conditioning - using only detector measurements")
 
-    # Normalize inputs using training-time statistics (do not touch targets)
     X_norm = data_preprocessor.normalize_inputs(X)
     X_tensor = torch.from_numpy(X_norm).float().to(config.device)
 
-    # Load trained model
     if model_path is None:
         model_path = os.path.join(
             config.ckpt_path,
             f"diffusion_{config.train_type}_b{config.batch_size}_it{config.epochs}.pth",
         )
 
-    print(f"Loading model from: {model_path}")
+    logger.info(f"Loading model from: {model_path}")
 
-    # Initialize model using unified config
-    model_config = config.get_model_config()
     model = Model(
         device=config.device,
         beta_1=config.beta_1,
@@ -103,7 +81,6 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
         output_dim=config.output_dim,
     )
 
-    # Load state dict with cleanup for compiled models
     state_dict = torch.load(model_path, weights_only=True, map_location=config.device)
     unwanted_prefix = "_orig_mod."
     for k, v in list(state_dict.items()):
@@ -113,7 +90,6 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
     model.load_state_dict(state_dict)
     model.eval()
 
-    # Initialize diffusion process
     diffusion_process = DiffusionProcess(
         beta_1=config.beta_1,
         beta_T=config.beta_T,
@@ -123,9 +99,6 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
         shape=(config.output_dim,),
     )
 
-    print("Unfolding events...")
-
-    # Unfold in batches
     unfolded_results = []
     n_batches = len(X_tensor) // config.sample_size
 
@@ -138,7 +111,6 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
 
             batch_conditioning = X_tensor[start_idx:end_idx]
 
-            # Generate samples
             unfolded_batch = diffusion_process.sampling(
                 config.sample_size, batch_conditioning
             )
@@ -146,7 +118,6 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
             unfolded_results.append(unfolded_batch.cpu().numpy())
             pbar.update()
 
-    # Handle remaining events
     if len(X_tensor) % config.sample_size != 0:
         remaining_start = n_batches * config.sample_size
         remaining_conditioning = X_tensor[remaining_start:]
@@ -157,17 +128,17 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
 
         unfolded_results.append(remaining_unfolded.cpu().numpy())
 
-    # Combine results
     unfolded = np.concatenate(unfolded_results, axis=0)
-
-    # Denormalize
     unfolded_denorm = data_preprocessor.denormalize_output(unfolded)
 
-    # Prepare output format (add event numbers)
-    event_numbers = np.arange(len(unfolded_denorm))
-    output_data = np.column_stack([event_numbers, unfolded_denorm])
+    if getattr(config, "predict_conditioning_features", False):
+        unfolded_neutrinos = unfolded_denorm[:, : config.n_dims]
+    else:
+        unfolded_neutrinos = unfolded_denorm
 
-    # Save results
+    event_numbers = np.arange(len(unfolded_neutrinos))
+    output_data = np.column_stack([event_numbers, unfolded_neutrinos])
+
     output_path = os.path.join(
         config.output_path,
         f"unfold_diffusion_{config.unf_type}.npy",
@@ -176,21 +147,19 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
     os.makedirs(config.output_path, exist_ok=True)
     np.save(output_path, output_data)
 
-    print(f"Unfolding completed! Results saved to: {output_path}")
-    print(f"Unfolded {len(unfolded_denorm)} events")
+    logger.info(f"Unfolding completed! Results saved to: {output_path}")
+    logger.info(f"Unfolded {len(unfolded_denorm)} events")
 
     return output_data
 
 
 def evaluate_unfolding_quality(unfolded_path, truth_path):
     """Evaluate quality of unfolded results against truth."""
-    print("Evaluating unfolding quality...")
+    logger.info("Evaluating unfolding quality...")
 
-    # Load unfolded results
     unfolded_data = np.load(unfolded_path)
-    unfolded_neutrinos = unfolded_data[:, 1:]  # Remove event numbers
+    unfolded_neutrinos = unfolded_data[:, 1:]
 
-    # Load truth data
     truth_data = pd.read_csv(truth_path + "_cuts.csv")
     truth_neutrinos = truth_data[
         [
@@ -205,22 +174,19 @@ def evaluate_unfolding_quality(unfolded_path, truth_path):
         ]
     ].values
 
-    # Ensure same number of events
     min_events = min(len(unfolded_neutrinos), len(truth_neutrinos))
     unfolded_neutrinos = unfolded_neutrinos[:min_events]
     truth_neutrinos = truth_neutrinos[:min_events]
 
-    # Calculate metrics
     diff = unfolded_neutrinos - truth_neutrinos
     mae = np.mean(np.abs(diff), axis=0)
     mse = np.mean(diff**2, axis=0)
     rmse = np.sqrt(mse)
 
-    print("Evaluation Results:")
-    print(f"Mean Absolute Error (per component): {mae}")
-    print(f"Root Mean Square Error (per component): {rmse}")
-    print(f"Overall MAE: {np.mean(mae):.4f}")
-    print(f"Overall RMSE: {np.mean(rmse):.4f}")
+    logger.info(f"Mean Absolute Error (per component): {mae}")
+    logger.info(f"Root Mean Square Error (per component): {rmse}")
+    logger.info(f"Overall MAE: {np.mean(mae):.4f}")
+    logger.info(f"Overall RMSE: {np.mean(rmse):.4f}")
 
     return {
         "mae_per_component": mae,
