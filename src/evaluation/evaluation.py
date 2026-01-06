@@ -119,16 +119,26 @@ class calculate_results:
 
         os.makedirs(target_path, exist_ok=True)
 
-        for cov_2d, label in zip(self.datasets, self.labels):
+        for pW1, pW2, cov_2d, label in zip(self.pW1, self.pW2, self.datasets, self.labels):
             cov_mean = cov_2d.mean(axis=0) / 4
+            pW1 /= 2
+            pW2 /= 2
 
-            vmin = cov_mean.min()
-            vmax = cov_mean.max()
+            vmin = min(cov_mean.min(), pW1.mean(axis=0).min(), pW2.mean(axis=0).min())
+            vmax = max(cov_mean.max(), pW1.mean(axis=0).max(), pW2.mean(axis=0).max())
+
+            full = np.zeros((9, 9), dtype=float)
+            full[1:9, 1:9] = cov_mean
+            full[0, 0] = 0
+            full[0, 1:9] = pW1.mean(axis=0)
+            full[1:9, 0] = pW2.mean(axis=0)
 
             norm = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
 
             plt.figure(figsize=(8, 6))
-            plt.imshow(cov_mean, cmap="seismic", norm=norm, interpolation="nearest")
+            plt.imshow(full, cmap="seismic", norm=norm, interpolation="nearest")
+            plt.axhline(0.5, color="black", linewidth=1, linestyle="--")
+            plt.axvline(0.5, color="black", linewidth=1, linestyle="--")
             cbar = plt.colorbar()
             cbar.ax.tick_params(labelsize=13)
 
@@ -137,15 +147,14 @@ class calculate_results:
             plt.ylabel(r"$W^-$ Index $i$", fontsize=16)
             plt.gca().invert_yaxis()
             plt.tight_layout()
-            plt.xticks(fontsize=18)
-            plt.yticks(fontsize=18)
+            plt.xticks(fontsize=15)
+            plt.yticks(fontsize=15)
 
             # Create a unique identifier based on current date and time and add the label
             current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"coefficients_plot_{label.lower()}_{current_datetime}.png"
 
             file_path = os.path.join(target_path, filename)
-
             plt.savefig(file_path)
             plt.close()
 
@@ -429,13 +438,13 @@ class calculate_results_diff_analysis(calculate_results):
 
         for k in range(1, 9):
             fig, ax = plt.subplots(figsize=(6, 4))
-            fig.suptitle(f"{self.title}: Φ$_{{{k}}}$", fontsize=18)
+            # fig.suptitle(f"{self.title}: Φ$_{{{k}}}$", fontsize=18)
 
             for sample, lbl, col, sign in (
                 (0, "truth  W⁻", "tab:blue", -1),
-                (1, "diffusion W⁻", "tab:cyan", -1),
+                (1, "truth cuts W⁻", "tab:cyan", -1),
                 (0, "truth  W⁺", "tab:red", +1),
-                (1, "diffusion W⁺", "tab:orange", +1),
+                (1, "truth cuts W⁺", "tab:orange", +1),
             ):
                 data = self.wignerP(k, sign, sample)
                 data = data[np.isfinite(data)]
@@ -443,15 +452,42 @@ class calculate_results_diff_analysis(calculate_results):
                 centres = 0.5 * (edges[:-1] + edges[1:])
                 ax.step(centres, hist, where="mid", label=lbl, color=col)
 
-            ax.set_xlabel("Φ value")
-            ax.set_ylabel("normalised counts")
-            ax.legend(fontsize=8)
-            ax.grid(True, alpha=0.3)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            # ax.spines['bottom'].set_bounds(-4.2, 4.2)
+            # ax.spines['left'].set_bounds(0.2, .15)
 
-            fname = f"wignerP_hist_k{k}_{datetime.now():%Y%m%d_%H%M%S}.png"
+            ax.set_ylabel("sample density")
+            ax.set_xlabel(r"$\Phi^{P^{\pm}}_4$ value distribution")
+            ax.legend(frameon=False,bbox_to_anchor=[.6, 0.6],fontsize=12)
+
+            fname = f"wignerP_hist_k{k}_{datetime.now():%Y%m%d_%H%M%S}.pdf"
             plt.tight_layout()
             plt.savefig(os.path.join(target_path, fname), dpi=150)
             plt.close(fig)
+
+    def plot_gellman_cov44(self, target_path):
+        os.makedirs(target_path, exist_ok=True)
+        
+        fig, ax = plt.subplots(figsize=(8, 6))
+        
+        for pW1, pW2, cov_2d, label in zip(self.pW1, self.pW2, self.datasets, self.labels):
+            cov_vals = cov_2d[:, 3, 3] / 4.0
+            cov_vals = cov_vals[np.isfinite(cov_vals)]
+            hist, edges = np.histogram(cov_vals, bins=50, density=True, range=(-10, 10))
+            centres = 0.5 * (edges[:-1] + edges[1:])
+            ax.step(centres, hist, where="mid", label=label, color=None)
+        
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.set_xlabel(r"$c_{44}$ values", fontsize=16)
+        ax.set_ylabel("sample density", fontsize=16)
+        ax.legend(frameon=False, fontsize=12)
+        
+        fname = f"gellmann_cov44_{datetime.now():%Y%m%d_%H%M%S}.pdf"
+        plt.tight_layout()
+        plt.savefig(os.path.join(target_path, fname), dpi=150)
+        plt.close(fig)
 
     def efficiency_map(self):
         N_cos = 18
@@ -580,3 +616,4 @@ class calculate_results_diff_analysis(calculate_results):
         self.initialize_datasets()
         self.plot_2d_angle_hist(target_path)
         self.plot_wignerP_1d_hist(target_path)
+        self.plot_gellman_cov44(target_path)
