@@ -72,6 +72,12 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
 
     logger.info(f"Loading model from: {model_path}")
 
+    # Extract model parameters from config (with defaults for backward compatibility)
+    dropout = float(config.model.get("dropout", 0.1))
+    loss_function = config.training.get("loss_function", "mse")
+    delta_0 = float(config.training.get("delta_0", 0.1))
+    alpha_decay = float(config.training.get("alpha_decay", 3.0))
+
     model = Model(
         device=config.device,
         beta_1=config.beta_1,
@@ -79,6 +85,13 @@ def unfold_with_diffusion(config_path="diffusion_config.yaml", model_path=None):
         T=config.T,
         input_dim=config.input_dim,
         output_dim=config.output_dim,
+        hidden_dim=config.hidden_dim,
+        num_layers=config.num_layers,
+        time_dim=config.time_dim,
+        dropout=dropout,
+        loss_function=loss_function,
+        delta_0=delta_0,
+        alpha_decay=alpha_decay,
     )
 
     state_dict = torch.load(model_path, weights_only=True, map_location=config.device)

@@ -15,18 +15,33 @@ data:
   detector_dataset_path: "diffusion_training_dataset.csv"
   truth_dataset_path: "diffusion_training_targets.csv"
   
+  # Optional separate validation datasets (if provided, override train/val split)
+  # detector_val_dataset_path: "diffusion_validation_dataset.csv"
+  # truth_val_dataset_path: "diffusion_validation_targets.csv"
+  
   # Input file pairs for preprocessing
   preprocessing:
     detector_files:
       - "data/hww_1M_MG_final_detector_sim_cuts.csv"
-      # - "data/ww_1M_MG_final_detector_sim_cuts.csv"
-      # - "data/ttbar_1M_MG_final_detector_sim_cuts.csv"
+      - "data/ww_1M_MG_final_detector_sim_cuts.csv"
+      - "data/ttbar_1M_MG_final_detector_sim_cuts.csv"
+      - "data/ztautau_1M_MG_final_detector_sim_cuts.csv"
       # - "data/hww_mangled_1M_MG_final_detector_sim_cuts.csv"
     truth_files:
       - "data/hww_1M_MG_final_truth_cuts.csv"
+      - "data/ww_1M_MG_final_truth_cuts.csv"
+      - "data/ttbar_1M_MG_final_truth_cuts.csv"
+      - "data/ztautau_1M_MG_final_truth_cuts.csv"
+      # - "data/hww_mangled_1M_MG_final_truth_cuts.csv"
+
+    # Optional separate validation file pairs for preprocessing
+    validation_detector_files:
+      # - "data/ww_1M_MG_final_detector_sim_cuts.csv"
+      # - "data/ttbar_1M_MG_final_detector_sim_cuts.csv"
+    validation_truth_files:
       # - "data/ww_1M_MG_final_truth_cuts.csv"
       # - "data/ttbar_1M_MG_final_truth_cuts.csv"
-      # - "data/hww_mangled_1M_MG_final_truth_cuts.csv"
+
 
 # =============================================================================
 # DATA PROCESSING CONFIGURATION
@@ -40,15 +55,16 @@ data_processing:
   pt_conditioning_moments: 3
   eta_conditioning_moments: 0
   phi_conditioning_moments: 0
-  mass_conditioning_moments: 0
+  mt_conditioning_moments: 0
   px_conditioning_moments: 0
   py_conditioning_moments: 0
+  predict_conditioning_features: true
   
   # Normalization ranges (in GeV)
   eta_range: 2.5
   phi_range: 3.5
   pT_range: 300
-  E_range: 400
+  E_range: 500
   
   # Data dimensions
   n_dims: 8  # 4 components for each of 2 neutrinos (E, px, py, pz)
@@ -74,31 +90,36 @@ model:
   
   # Network architecture
   hidden_dim: 512
-  num_layers: 8
+  num_layers: 14
   time_dim: 128
   
   # Diffusion parameters
-  beta_1: 1e-4
-  beta_T: 0.02
-  T: 500
+  beta_1: 0.00097
+  beta_T: 0.049
+  T: 1200
 
 # =============================================================================
 # TRAINING CONFIGURATION
 # =============================================================================
 
 training:
-  # Basic training parameters
+  # Training parameters
   epochs: 500
   batch_size: 1024
-  learning_rate: 3e-4
+  learning_rate: 0.00069
+  weight_decay: 2.267e-05
   
   # Data splitting
   train_split: 0.9
   validation_split: 0.1
   
   # Checkpointing
-  save_interval: 50
+  save_interval: 25
   save_checkpoints: true
+  
+  # Set patience <= 0 to disable early stopping
+  early_stopping_patience: 35
+  early_stopping_restore_best: true
   
   # Training type identifier
   train_type: "diffusion_unified"
@@ -131,9 +152,9 @@ system:
   device: "cuda"  # Will fallback to CPU if CUDA not available
   
   # Output paths
-  output_path: "./outputs/diffusion_pt/"
-  plots_path: "./plots/diffusion_pt/"
-  ckpt_path: "./model-state/diffusion_pt"
+  output_path: "./outputs/diffusion_pt_all_unfold_mangled/"
+  plots_path: "./plots/diffusion_pt_all_unfold_mangled/"
+  ckpt_path: "./model-state/diffusion_pt_all_unfold_mangled"
   
   # Logging
   verbose: false

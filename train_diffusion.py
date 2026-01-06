@@ -398,6 +398,12 @@ def train_diffusion_model_from_config(config):
 
     logger.info(f"Training batches: {len(train_batches)}, Validation batches: {len(val_batches)}")
 
+    # Extract model parameters from config
+    dropout = float(config.model.get("dropout", 0.1))
+    loss_function = config.training.get("loss_function", "mse")
+    delta_0 = float(config.training.get("delta_0", 0.1))
+    alpha_decay = float(config.training.get("alpha_decay", 3.0))
+
     model = torch.compile(
         Model(
             device=config.device,
@@ -406,6 +412,13 @@ def train_diffusion_model_from_config(config):
             T=config.T,
             input_dim=config.input_dim,
             output_dim=config.output_dim,
+            hidden_dim=config.hidden_dim,
+            num_layers=config.num_layers,
+            time_dim=config.time_dim,
+            dropout=dropout,
+            loss_function=loss_function,
+            delta_0=delta_0,
+            alpha_decay=alpha_decay,
         )
     )
 

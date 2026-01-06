@@ -1,4 +1,3 @@
-# Modified with https://cernbox.cern.ch/jupyter/public/Ju7DYsj0y8sQe2j/GeorgesAnalysis.ipynb?contextRouteName=files-public-link&contextRouteParams.driveAliasAndItem=public/Ju7DYsj0y8sQe2j
 import os
 import pandas as pd
 import numpy as np
@@ -364,6 +363,8 @@ class DataPreprocessor:
                 "mpy",
             ]
             self.X = self.X[~(self.X[zero_columns] == 0).any(axis=1)]
+            # Drop nan values as well
+            self.X = self.X.dropna()
 
         self.types = self.data["Event.Type"].copy()
 
