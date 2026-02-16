@@ -6,6 +6,7 @@ pip install -r req.txt
 ```
 
 # Create structured datasets from the raw data:
+The raw data path expects the inputs that you (Vince) provided. 
 Set the raw data path and the output paths in the `config.yaml` file. Then run the `main.py` script to generate the structured datasets.
 
 # Preprocess the structured datasets:
