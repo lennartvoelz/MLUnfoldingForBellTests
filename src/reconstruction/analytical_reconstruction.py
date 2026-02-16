@@ -199,18 +199,19 @@ class Baseline(LorentzVector):
         E_vv = self.di_neutrino_energy(M_vv, p_vv_z)
         p4_vv = LorentzVector([E_vv, p_vv_x, p_vv_y, p_vv_z])
 
-        # approach 2
         p_miss = LorentzVector([self.mpt, self.mpx, self.mpy, 0])
-        # p_miss = p4_vv
+
+        MW1 = self._estimate_w_mass(self.p4_lep0, p_miss)
+        MW2 = self._estimate_w_mass(self.p4_lep1, p_miss)
+
         dir_w1 = self.p4_lep0.get_momentum() / np.linalg.norm(
             self.p4_lep0.get_momentum()
         ) + p_miss.get_momentum() / (np.linalg.norm(p_miss.get_momentum()) * 2)
         p_abs_w1 = np.linalg.norm(
             self.p4_lep0.get_momentum() + p_miss.get_momentum() / 2
         )
-        # p_abs_w1 = 35*10**3
 
-        E_W1 = np.sqrt(70**2 + p_abs_w1**2)
+        E_W1 = np.sqrt(MW1**2 + p_abs_w1**2)
         W1 = LorentzVector(
             [E_W1, p_abs_w1 * dir_w1[0], p_abs_w1 * dir_w1[1], p_abs_w1 * dir_w1[2]]
         )
@@ -221,9 +222,8 @@ class Baseline(LorentzVector):
         p_abs_w2 = np.linalg.norm(
             self.p4_lep1.get_momentum() + p_miss.get_momentum() / 2
         )
-        # p_abs_w2 = 29*10**3
 
-        E_W2 = np.sqrt(39**2 + p_abs_w2**2)
+        E_W2 = np.sqrt(MW2**2 + p_abs_w2**2)
         W2 = LorentzVector(
             [E_W2, p_abs_w2 * dir_w2[0], p_abs_w2 * dir_w2[1], p_abs_w2 * dir_w2[2]]
         )
@@ -233,6 +233,49 @@ class Baseline(LorentzVector):
         p4_v_off = p4_vv - p4_v_on
 
         return p4_v_on.to_numpy(), p4_v_off.to_numpy()
+
+    def _estimate_w_mass(self, p4_lep, p_miss):
+        """
+        Physics-based W mass estimation using on-shell constraint.
+        
+        For a W boson: (p_lep + p_nu)² = M_W²
+        Expanding: E_lep·E_nu - p_lep·p_nu = M_W²/2
+        
+        Solving for M_W: M_W² = 2(E_lep·E_nu - p_lep·p_nu)
+        
+        Parameters:
+            p4_lep: Lepton 4-vector (LorentzVector)
+            p_miss: Missing momentum 4-vector (LorentzVector)
+        
+        Returns:
+            W mass in GeV (physical estimate or Breit-Wigner fallback)
+        """
+        # Physics constants
+        m_w_nominal = 81.0
+        gamma_w = 2.1       # W natural width (GeV)
+        
+        # Extract components
+        E_lep = p4_lep.get_energy()
+        p_lep = p4_lep.get_momentum()
+        E_miss = p_miss.get_energy()  # MET magnitude
+        p_miss_vec = p_miss.get_momentum()
+        
+        # On-shell constraint: (p_lep + p_nu)² = M_W²
+        # In practice: M_W² = 2(E_lep·E_nu - p_lep·p_nu)
+        p_dot = np.dot(p_lep, p_miss_vec)
+        m_w_sq = 2.0 * (E_lep * E_miss - p_dot)
+        
+        # Check if on-shell solution is physical
+        if m_w_sq > 0:
+            m_w_candidate = np.sqrt(m_w_sq)
+            
+            # Accept if within 3σ of Breit-Wigner distribution
+            # (3 natural widths from nominal value)
+            if abs(m_w_candidate - m_w_nominal) < 3 * gamma_w:
+                return m_w_candidate
+        
+        # Fallback to PDG nominal value if solution is unphysical
+        return m_w_nominal
 
     def calculate_neutrino_solutions(self):
         if self.p4_lep0.get_pt() > self.p4_lep1.get_pt():

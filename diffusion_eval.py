@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 data_neutrino = pd.read_csv(
-    "outputs/diffusion_pt_all_unfold_mangled/unfold_diffusion_lepqua_CT14lo.csv"
+    "outputs/diffusion_pt_mg_signal_unfold/unfold_diffusion_lepqua_CT14lo.csv"
 )
 data_leptons = pd.read_csv("data/hww_sherpa_1M_MG_final_truth_cuts.csv")
 

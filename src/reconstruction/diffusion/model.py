@@ -43,7 +43,7 @@ class DiffusionModel(nn.Module):
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(time_dim),
             nn.Linear(time_dim, time_dim),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(time_dim, time_dim),
         )
 
@@ -52,18 +52,20 @@ class DiffusionModel(nn.Module):
         self.has_conditioning = input_dim > 0
         if self.has_conditioning:
             self.cond_proj = nn.Linear(input_dim, hidden_dim)
+            first_layer_input_dim = hidden_dim + hidden_dim + time_dim
         else:
             self.cond_proj = None
+            first_layer_input_dim = hidden_dim + time_dim
 
         layers = []
         layers += [
-            nn.Linear(hidden_dim + time_dim, hidden_dim),
-            nn.ReLU(),
+            nn.Linear(first_layer_input_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
             nn.Dropout(dropout),
         ]
         for _ in range(num_layers - 1):
-            layers += [nn.Linear(hidden_dim, hidden_dim), nn.ReLU(), nn.Dropout(dropout)]
-
+            layers += [nn.Linear(hidden_dim, hidden_dim), nn.GELU(), nn.Dropout(dropout)]
         self.main_net = nn.Sequential(*layers)
         self.output_proj = nn.Linear(hidden_dim, output_dim)
 
@@ -88,11 +90,10 @@ class DiffusionModel(nn.Module):
 
         if self.has_conditioning and cond.shape[-1] > 0:
             cond_proj = self.cond_proj(cond)
-            h = x_proj + cond_proj
+            h = torch.cat([x_proj, cond_proj, time_emb], dim=-1)
         else:
-            h = x_proj
+            h = torch.cat([x_proj, time_emb], dim=-1)
 
-        h = torch.cat([h, time_emb], dim=-1)
         h = self.main_net(h)
 
         noise_pred = self.output_proj(h)
@@ -146,23 +147,6 @@ class Model(nn.Module):
         """Forward pass through the model."""
         return self.model(x, cond, t, train)
 
-    def _pseudo_huber_loss(self, pred, target, delta):
-        """
-        Compute Pseudo Huber Loss: H_δ(x) = δ²(√(1 + x²/δ²) − 1)
-
-        Parameters:
-            pred: Predicted values
-            target: Target values
-            delta: Delta parameter controlling switching point
-
-        Returns:
-            Pseudo Huber loss
-        """
-        diff = pred - target
-        delta_sq = delta ** 2
-        loss = delta_sq * (torch.sqrt(1 + (diff ** 2) / delta_sq) - 1)
-        return loss.mean()
-
     def loss_fn(self, x_0, cond):
         """
         Calculate diffusion loss for training.
@@ -185,19 +169,16 @@ class Model(nn.Module):
         sqrt_one_minus_alpha_bar = torch.sqrt(1 - self.alpha_bars[t]).unsqueeze(-1)
 
         x_t = sqrt_alpha_bar * x_0 + sqrt_one_minus_alpha_bar * noise
-
         noise_pred = self.model(x_t, cond, t, train=True)
 
-        if self.loss_function == "pseudo_huber":
-            # Time-dependent delta scheduling: δ(t) = δ₀ · exp(-α · t/T)
-            # Convert t to float for division
-            t_normalized = t.float() / self.T
-            delta_t = self.delta_0 * torch.exp(-self.alpha_decay * t_normalized)
-            # Expand delta_t to match noise_pred shape for element-wise operations
-            delta_t = delta_t.unsqueeze(-1)
-            loss = self._pseudo_huber_loss(noise_pred, noise, delta_t)
-        else:
-            # Default to MSE loss
-            loss = nn.MSELoss()(noise_pred, noise)
+        snr = self.alpha_bars[t] / (1 - self.alpha_bars[t])
+        weights = torch.clamp(snr, max=5.0).unsqueeze(-1)
+        
+        # Compute per-sample MSE
+        mse_per_sample = (noise_pred - noise) ** 2  # [batch_size, output_dim]
+        mse_per_sample = mse_per_sample.mean(dim=-1, keepdim=True)  # [batch_size, 1]
+        
+        weighted_loss = weights * mse_per_sample  # [batch_size, 1]
+        loss = weighted_loss.mean()  # scalar
 
         return loss

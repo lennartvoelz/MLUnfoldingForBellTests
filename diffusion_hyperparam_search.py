@@ -48,64 +48,51 @@ def build_trial_config(
 
     # --- Sample hyperparameters ---
     # Learning rate (log-uniform over a typical range)
-    lr = trial.suggest_float("learning_rate", 1e-5, 3e-2, log=True)
+    # lr = trial.suggest_float("learning_rate", 3e-5, 3e-3, log=True)
 
     # L2 regularization strength for Adam (weight_decay). We sample on a
     # log scale over a typical small range; values near the lower end behave
     # similarly to having no weight decay.
-    weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
+    weight_decay = trial.suggest_float("weight_decay", 1e-8, 1e-6, log=True)
 
     # Hidden dimension for the diffusion network
-    hidden_dim = trial.suggest_categorical("hidden_dim", [128, 256, 512, 1024])
+    hidden_dim = trial.suggest_categorical("hidden_dim", [256, 512, 1024])
 
     # Number of epochs (kept relatively small to make search tractable)
-    epochs = trial.suggest_int("epochs", 20, 40, step=10)
+    # epochs = trial.suggest_int("epochs", 30, 50, step=10)
 
     # Normalisation ranges for pT and E (in GeV) - separate hyperparameters
-    pT_range = trial.suggest_int("pT_range", 100, 500, step=50)
-    E_range = trial.suggest_int("E_range", 100, 500, step=50)
+    # pT_range = trial.suggest_int("pT_range", 250, 500, step=50)
+    # E_range = trial.suggest_int("E_range", 400, 600, step=50)
 
     # Dropout rate
-    dropout = trial.suggest_float("dropout", 0.0, 0.5, step=0.05)
-
-    # Loss function selection
-    loss_function = trial.suggest_categorical("loss_function", ["mse", "pseudo_huber"])
-
-    # Pseudo Huber Loss parameters (only used if loss_function == "pseudo_huber")
-    delta_0 = trial.suggest_float("delta_0", 0.05, 0.3, step=0.05)
-    alpha_decay = trial.suggest_float("alpha_decay", 2.0, 6.0, step=0.5)
+    dropout = trial.suggest_float("dropout", 0.0, 0.15, step=0.01)
 
     # Diffusion schedule parameters around current defaults
-    beta_1 = trial.suggest_float("beta_1", 1e-5, 1e-3, log=True)
-    beta_T = trial.suggest_float("beta_T", 5e-3, 5e-2, log=True)
-    T = trial.suggest_int("T", 200, 1500, step=100)
+    # beta_1 = trial.suggest_float("beta_1", 1e-5, 1e-3, log=True)
+    # beta_T = trial.suggest_float("beta_T", 5e-3, 5e-2, log=True)
+    # T = trial.suggest_int("T", 1000, 1600, step=100)
 
     # Model depth
-    num_layers = trial.suggest_int("num_layers", 2, 16, step=2)
+    num_layers = trial.suggest_int("num_layers", 3, 8, step=1)
 
     # --- Apply to config dicts ---
     # Training hyperparameters
-    config.training["learning_rate"] = float(lr)
-    config.training["epochs"] = int(epochs)
+    # config.training["learning_rate"] = float(lr)
+    config.training["epochs"] = 35
     config.training["weight_decay"] = float(weight_decay)
 
     # Model hyperparameters
     config.model["hidden_dim"] = int(hidden_dim)
-    config.model["beta_1"] = float(beta_1)
-    config.model["beta_T"] = float(beta_T)
-    config.model["T"] = int(T)
+    # config.model["beta_1"] = float(beta_1)
+    # config.model["beta_T"] = float(beta_T)
+    # config.model["T"] = int(T)
     config.model["num_layers"] = int(num_layers)
     config.model["dropout"] = float(dropout)
 
     # Normalisation ranges (separate for pT and E)
-    config.data_processing["pT_range"] = int(pT_range)
-    config.data_processing["E_range"] = int(E_range)
-
-    # Loss function configuration
-    config.training["loss_function"] = str(loss_function)
-    if loss_function == "pseudo_huber":
-        config.training["delta_0"] = float(delta_0)
-        config.training["alpha_decay"] = float(alpha_decay)
+    # config.data_processing["pT_range"] = int(pT_range)
+    # config.data_processing["E_range"] = int(E_range)
 
     # Give each trial a unique train_type so checkpoints and history files
     # do not overwrite each other.
@@ -143,7 +130,7 @@ def objective(
 def main():
     parser = argparse.ArgumentParser(description="Hyperparameter search for diffusion model.")
     parser.add_argument("--config", default="diffusion_config.yaml", help="Path to diffusion config YAML")
-    parser.add_argument("--n-trials", type=int, default=100, help="Number of Optuna trials")
+    parser.add_argument("--n-trials", type=int, default=15, help="Number of Optuna trials")
     parser.add_argument(
         "--study-name",
         default="diffusion_hparam_search",

@@ -110,7 +110,7 @@ class calculate_results:
             self.bell_values.append(bell_values)
 
             # Write bell values to csv
-            # np.savetxt(f"bell_values_{label}.csv", bell_values, delimiter=",")
+            np.savetxt(f"bell_values_{label}.csv", bell_values, delimiter=",")
 
     def plot_gellmann_coefficients(self, target_path):
         """

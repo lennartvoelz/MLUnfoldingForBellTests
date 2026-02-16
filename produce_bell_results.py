@@ -2,7 +2,7 @@ from src.evaluation.evaluation import calculate_results, calculate_results_diff_
 import numpy as np
 import pandas as pd
 
-data = pd.read_csv("data/hww_1M_MG_final_truth.csv")
+data = pd.read_csv("data/mangled_hww_1M_MG_final_truth_cuts.csv")
 data_cuts = pd.read_csv("data/hww_1M_MG_final_truth_cuts.csv")
 
 X = data[
