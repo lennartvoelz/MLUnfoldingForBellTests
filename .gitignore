@@ -1,6 +1,9 @@
 **/data/
 run_regression/
 additional_scripts/
+model-state/
+outputs/
+plots/
 data/
 reports/
 logs/
@@ -9,6 +12,7 @@ logs/
 *.json
 *.log
 *.h5
+*.csv
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
